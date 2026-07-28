@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>弹球箱庭 Demo</title>
+    <link rel="icon" href="data:,">
+    <link rel="stylesheet" href="styles.css">
+  </head>
+  <body>
+    <main class="shell">
+      <section id="startScreen" class="start-screen" aria-label="游戏开始界面">
+        <div class="start-overlay"></div>
+        <div class="start-content">
+          <h1 class="game-logo" aria-label="弹珠">弹珠</h1>
+          <div class="start-actions">
+            <button id="startGame" class="primary" type="button">开始游戏</button>
+            <button id="exitGame" type="button">退出游戏</button>
+          </div>
+          <p id="startExitStatus" class="start-exit-status" aria-live="polite"></p>
+        </div>
+      </section>
+
+      <section id="levelMenu" class="level-menu" aria-label="关卡菜单">
+        <div class="level-menu-panel">
+          <p class="eyebrow">Level Select</p>
+          <h1>选择关卡</h1>
+          <p class="menu-note">每行 5 关，难度按顺序递增。自定义关卡保存后会出现在官方关卡后面。</p>
+          <div class="menu-actions">
+            <button id="openEditor" class="primary" type="button">进入关卡编辑器</button>
+          </div>
+          <div id="levelGrid" class="level-grid"></div>
+        </div>
+      </section>
+
+      <section class="play-area" aria-label="弹球箱庭">
+        <canvas id="game" width="960" height="600"></canvas>
+      </section>
+
+      <aside class="panel" aria-label="控制面板">
+        <div id="playPanel" class="panel-mode">
+          <div class="level-row">
+            <button id="prevLevel" type="button" title="上一关">‹</button>
+            <div>
+              <p class="eyebrow">Level <span id="levelNumber">1</span></p>
+              <h1 id="levelName">直线校准</h1>
+            </div>
+            <button id="nextLevel" type="button" title="下一关">›</button>
+          </div>
+
+          <button id="openMenu" class="menu-button" type="button">返回关卡菜单</button>
+
+          <div class="stat-grid">
+            <div>
+              <span>发射次数</span>
+              <strong id="shotCount">0</strong>
+            </div>
+            <div>
+              <span>当前调整</span>
+              <strong id="launcherName">A1</strong>
+            </div>
+            <div class="wide-stat">
+              <span>关卡考验</span>
+              <strong id="levelFocus">基础瞄准</strong>
+            </div>
+          </div>
+
+          <div class="control-group">
+            <label>可调发射器</label>
+            <div id="launcherButtons" class="segmented"></div>
+          </div>
+
+          <div class="control-group">
+            <div class="label-row">
+              <label for="angle">方向</label>
+              <output id="angleValue" for="angle">0°</output>
+            </div>
+            <input id="angle" type="range" min="-180" max="180" value="0">
+          </div>
+
+          <div class="control-group">
+            <div class="label-row">
+              <label for="power">力度</label>
+              <output id="powerValue" for="power">0</output>
+            </div>
+            <input id="power" type="range" min="220" max="900" value="520">
+          </div>
+
+          <div class="control-group">
+            <div class="label-row">
+              <label for="previewLength">预线长度</label>
+              <output id="previewLengthValue" for="previewLength">480</output>
+            </div>
+            <input id="previewLength" type="range" min="260" max="760" step="20" value="480">
+          </div>
+
+          <div class="actions">
+            <button id="shoot" class="primary" type="button" title="Space / Enter">发射 Space</button>
+            <button id="reset" type="button">重置</button>
+          </div>
+
+          <p id="status" class="status">拖动发射器或调整滑杆，目标是让球碰到 B 点。</p>
+        </div>
+
+        <div id="editorPanel" class="panel-mode editor-panel hidden">
+          <div>
+            <p class="eyebrow">Editor</p>
+            <h1>关卡编辑器</h1>
+          </div>
+
+          <div class="control-group">
+            <label for="editorLevelName">关卡名称</label>
+            <input id="editorLevelName" class="text-input" type="text" maxlength="18" value="我的关卡">
+          </div>
+
+          <div class="actions">
+            <button id="newCustomLevel" type="button">新建</button>
+            <button id="saveCustomLevel" class="primary" type="button">完成设计并保存到菜单</button>
+          </div>
+
+          <div class="actions">
+            <button id="playEditedLevel" type="button">试玩当前草稿</button>
+            <button id="backToMenuFromEditor" type="button">返回关卡菜单（不保存）</button>
+          </div>
+
+          <button id="deleteCustomLevel" class="danger" type="button">删除当前关卡</button>
+
+          <div class="control-group">
+            <label>添加组件</label>
+            <div class="tool-grid">
+              <button data-editor-tool="start" type="button">A 发射器</button>
+              <button data-editor-tool="relay" type="button">R 中继</button>
+              <button data-editor-tool="target" type="button">B 目标</button>
+              <button data-editor-tool="wall" type="button">矩形墙</button>
+              <button data-editor-tool="triangleWall" type="button">三角墙</button>
+              <button data-editor-tool="circleWall" type="button">圆形墙</button>
+              <button data-editor-tool="boostWall" type="button">高弹墙</button>
+              <button data-editor-tool="redSwitch" type="button">红按钮</button>
+              <button data-editor-tool="redDoor" type="button">红门</button>
+              <button data-editor-tool="moving" type="button">移动机关</button>
+              <button data-editor-tool="portal" type="button">传送门</button>
+            </div>
+          </div>
+
+          <div class="editor-property-panel">
+            <div class="label-row">
+              <label>当前组件</label>
+              <strong id="editorSelectedType">未选择</strong>
+            </div>
+
+            <div class="property-grid">
+              <label>X<input id="editorX" type="number" min="36" max="924" step="1"></label>
+              <label>Y<input id="editorY" type="number" min="36" max="564" step="1"></label>
+              <label class="rect-prop">宽<input id="editorWidth" type="number" min="20" max="500" step="1"></label>
+              <label class="rect-prop">高<input id="editorHeight" type="number" min="20" max="500" step="1"></label>
+              <label class="circle-prop">半径<input id="editorRadius" type="number" min="12" max="160" step="1"></label>
+              <label class="material-prop">材质<select id="editorMaterial"><option value="normal">普通</option><option value="boost">高弹</option></select></label>
+              <label class="angle-prop">角度<input id="editorAngle" type="number" min="-180" max="180" step="1"></label>
+              <label class="power-prop">力度<input id="editorPower" type="number" min="220" max="900" step="10"></label>
+              <label class="moving-prop">移动 X<input id="editorPathX" type="number" min="-300" max="300" step="10"></label>
+              <label class="moving-prop">移动 Y<input id="editorPathY" type="number" min="-300" max="300" step="10"></label>
+              <label class="moving-prop">速度<input id="editorSpeed" type="number" min="0.2" max="3" step="0.1"></label>
+            </div>
+
+            <button id="deleteEditorObject" class="danger" type="button">删除组件</button>
+          </div>
+
+          <div class="control-group">
+            <label>已保存关卡</label>
+            <div id="customLevelList" class="custom-level-list"></div>
+          </div>
+
+          <p id="editorStatus" class="status">选择组件后，在画布中拖动摆放。发射器和中继会显示自己的预线。</p>
+        </div>
+      </aside>
+
+      <div id="levelCompleteDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="completeTitle">
+        <div class="modal-panel">
+          <p class="eyebrow">Stage clear</p>
+          <h2 id="completeTitle">命中成功</h2>
+          <p id="completeBody">你已经命中 B 点。</p>
+          <div class="modal-actions">
+            <button id="replayLevel" type="button">重玩本关</button>
+            <button id="continueLevel" class="primary" type="button">返回关卡菜单</button>
+          </div>
+        </div>
+      </div>
+    </main>
+
+    <script src="src/simulation.js"></script>
+    <script src="src/levels.js"></script>
+    <script src="src/mechanics.js"></script>
+    <script src="src/progression.js"></script>
+    <script src="src/game.js"></script>
+  </body>
+</html>
