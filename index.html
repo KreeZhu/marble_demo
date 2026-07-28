@@ -12,7 +12,11 @@
       <section id="startScreen" class="start-screen" aria-label="游戏开始界面">
         <div class="start-overlay"></div>
         <div class="start-content">
-          <h1 class="game-logo" aria-label="弹珠">弹珠</h1>
+          <h1 class="game-logo" aria-label="弹珠">
+            <span class="logo-rail" aria-hidden="true"><span class="logo-marble"></span></span>
+            <span class="logo-char" data-char="弹">弹</span>
+            <span class="logo-char logo-char-alt" data-char="珠">珠</span>
+          </h1>
           <div class="start-actions">
             <button id="startGame" class="primary" type="button">开始游戏</button>
             <button id="exitGame" type="button">退出游戏</button>
