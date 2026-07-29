@@ -266,9 +266,20 @@
   }
 
   function resolveShapedObstacleBounce(ball, obstacle, restitution = 1) {
-    if (obstacle.shape === 'circle') return resolveCircleObstacleBounce(ball, obstacle, restitution);
-    if (obstacle.shape === 'triangle') return resolveTriangleObstacleBounce(ball, obstacle, restitution);
-    return resolveObstacleBounce(ball, obstacle, restitution);
+    const isSticky = obstacle.material === 'sticky';
+    const effectiveRestitution = isSticky ? 0 : restitution;
+    const collided = obstacle.shape === 'circle'
+      ? resolveCircleObstacleBounce(ball, obstacle, effectiveRestitution)
+      : obstacle.shape === 'triangle'
+        ? resolveTriangleObstacleBounce(ball, obstacle, effectiveRestitution)
+        : resolveObstacleBounce(ball, obstacle, effectiveRestitution);
+
+    if (collided && isSticky) {
+      ball.vx = 0;
+      ball.vy = 0;
+    }
+
+    return collided;
   }
 
   function updateMovingObstacle(rect, dt) {

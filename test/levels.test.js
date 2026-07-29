@@ -15,6 +15,7 @@ const {
 } = require('../src/simulation');
 
 const arena = { x: 36, y: 36, width: 888, height: 528 };
+const fixedLauncherPower = 700;
 
 function cloneObstacles(level) {
   return level.obstacles.map((obstacle) => ({
@@ -58,12 +59,12 @@ function traceDefaultLauncher(level) {
   const ball = createBall({
     x: launcher.x,
     y: launcher.y,
-    vx: Math.cos(radians) * launcher.power,
-    vy: Math.sin(radians) * launcher.power,
+    vx: Math.cos(radians) * fixedLauncherPower,
+    vy: Math.sin(radians) * fixedLauncherPower,
     radius: 9,
   });
   const obstacles = cloneObstacles(level);
-  const relays = (level.relayLaunchers || []).map((relay) => ({ ...relay }));
+  const relays = (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower }));
   const switches = cloneSwitches(level);
   const doors = cloneDoors(level);
   const trace = {
@@ -88,7 +89,7 @@ function traceDefaultLauncher(level) {
     }
 
     obstacles.concat(activeDoorObstacles(doors)).forEach((obstacle, index) => {
-      if (resolveShapedObstacleBounce(ball, obstacle, 0.94)) {
+      if (resolveShapedObstacleBounce(ball, obstacle, obstacle.material === 'boost' ? 1.22 : 0.94)) {
         trace.obstacleBounces.add(obstacle.id);
         if (index < level.obstacles.length && level.obstacles[index].path) trace.hitMovingObstacle = true;
       }
@@ -135,7 +136,7 @@ function inArenaCircle(circle) {
 }
 
 test('game has progressively numbered levels', () => {
-  assert.equal(levels.length, 15);
+  assert.equal(levels.length, 16);
   levels.forEach((level, index) => {
     assert.equal(level.order, index + 1);
   });
@@ -145,6 +146,15 @@ test('every level has one adjustable start launcher', () => {
   levels.forEach((level) => {
     assert.equal(level.launchers.length, 1, `${level.name} should only expose A1`);
     assert.equal(level.launchers[0].id, 'A1');
+    assert.equal(level.launchers[0].power, fixedLauncherPower, `${level.name}/A1 should use fixed power`);
+  });
+});
+
+test('all authored relay launchers use the fixed power', () => {
+  levels.forEach((level) => {
+    (level.relayLaunchers || []).forEach((relay) => {
+      assert.equal(relay.power, fixedLauncherPower, `${level.name}/${relay.id} should use fixed power`);
+    });
   });
 });
 
@@ -190,12 +200,13 @@ test('difficulty adds mechanics over time', () => {
   assert.ok(levels[9].relayLaunchers.length >= 1);
   assert.ok(levels[10].switches.length >= 1);
   assert.ok(levels[10].doors.length >= 1);
-  assert.ok(levels.slice(10).every((level) => (level.switches || []).length >= 1));
-  assert.ok(levels.slice(10).every((level) => (level.doors || []).length >= 1));
+  assert.ok(levels.slice(10, 15).every((level) => (level.switches || []).length >= 1));
+  assert.ok(levels.slice(10, 15).every((level) => (level.doors || []).length >= 1));
   assert.ok(levels[11].requiredMechanics.includes('wallBounce'));
   assert.ok(levels[12].obstacles.some((obstacle) => obstacle.path));
   assert.ok(levels[13].portals.length >= 2);
   assert.ok(levels[14].relayLaunchers.length >= 1);
+  assert.ok(levels[15].obstacles.some((obstacle) => obstacle.material === 'sticky'));
 });
 
 test('each level can be solved by its authored default launcher route', () => {

@@ -17,6 +17,10 @@
   box-sizing: border-box;
 }
 
+.hidden {
+  display: none !important;
+}
+
 body {
   margin: 0;
   min-height: 100vh;
@@ -54,8 +58,9 @@ input {
   min-height: 100vh;
   overflow: hidden;
   background:
-    linear-gradient(180deg, rgba(5, 8, 10, 0.12), rgba(5, 8, 10, 0.7)),
-    url("assets/cover-pinball.png") center / cover no-repeat,
+    radial-gradient(circle at 30% 72%, rgba(65, 214, 146, 0.28), transparent 16%),
+    radial-gradient(circle at 76% 28%, rgba(255, 111, 97, 0.16), transparent 12%),
+    linear-gradient(150deg, rgba(17, 24, 29, 0.98), rgba(8, 11, 13, 0.96)),
     #0b0f12;
 }
 
@@ -67,9 +72,39 @@ input {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(circle at 50% 24%, rgba(65, 214, 146, 0.24), transparent 28%),
-    linear-gradient(90deg, rgba(5, 8, 10, 0.58), rgba(5, 8, 10, 0.12) 48%, rgba(5, 8, 10, 0.62));
+    linear-gradient(90deg, rgba(65, 214, 146, 0.16) 1px, transparent 1px),
+    linear-gradient(0deg, rgba(85, 167, 255, 0.08) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(5, 8, 10, 0.44), rgba(5, 8, 10, 0.08) 50%, rgba(5, 8, 10, 0.5));
+  background-size: 72px 72px, 72px 72px, auto;
   pointer-events: none;
+}
+
+.start-overlay::before,
+.start-overlay::after {
+  content: "";
+  position: absolute;
+  border: 2px solid rgba(244, 247, 251, 0.14);
+  border-radius: 999px;
+  pointer-events: none;
+}
+
+.start-overlay::before {
+  left: 10vw;
+  bottom: 12vh;
+  width: 38vw;
+  height: 18vw;
+  border-color: rgba(65, 214, 146, 0.22);
+  transform: rotate(-18deg);
+  box-shadow: 0 0 34px rgba(65, 214, 146, 0.12);
+}
+
+.start-overlay::after {
+  right: 12vw;
+  top: 14vh;
+  width: 16vw;
+  height: 16vw;
+  border-color: rgba(255, 111, 97, 0.2);
+  box-shadow: inset 0 0 42px rgba(255, 111, 97, 0.08);
 }
 
 .start-content {
@@ -140,8 +175,9 @@ input {
   background-clip: text;
   -webkit-background-clip: text;
   color: transparent;
-  -webkit-text-stroke: 3px rgba(4, 15, 12, 0.96);
+  -webkit-text-stroke: 3px rgba(225, 255, 246, 0.92);
   text-shadow:
+    0 0 0 #06120e,
     5px 6px 0 rgba(5, 20, 16, 0.96),
     12px 16px 0 rgba(0, 0, 0, 0.62),
     0 0 24px rgba(65, 214, 146, 0.95),
@@ -166,7 +202,7 @@ input {
 
 .logo-char::before {
   color: transparent;
-  -webkit-text-stroke: 14px rgba(4, 10, 12, 0.98);
+  -webkit-text-stroke: 18px rgba(4, 10, 12, 0.98);
   z-index: -2;
 }
 
@@ -186,13 +222,20 @@ input {
   right: 16px;
   top: 70px;
   height: 22px;
-  border-top: 6px solid rgba(95, 255, 184, 0.92);
+  border-top: 8px solid rgba(95, 255, 184, 0.96);
   border-radius: 999px;
   box-shadow:
-    0 0 18px rgba(65, 214, 146, 0.86),
-    0 0 40px rgba(85, 167, 255, 0.42);
+    0 0 18px rgba(65, 214, 146, 0.92),
+    0 0 40px rgba(85, 167, 255, 0.56),
+    0 8px 20px rgba(65, 214, 146, 0.32);
   transform: rotate(-8deg);
-  z-index: 2;
+  z-index: -1;
+}
+
+.logo-rail::before {
+  box-shadow:
+    0 0 14px rgba(65, 214, 146, 0.92),
+    0 0 28px rgba(244, 247, 251, 0.46);
 }
 
 .logo-rail::before,
@@ -204,7 +247,9 @@ input {
   height: 12px;
   border-radius: 50%;
   background: #dfffee;
-  box-shadow: 0 0 14px rgba(65, 214, 146, 0.92);
+  box-shadow:
+    0 0 14px rgba(65, 214, 146, 0.92),
+    0 0 28px rgba(244, 247, 251, 0.46);
 }
 
 .logo-rail::before {

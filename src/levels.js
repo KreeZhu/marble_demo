@@ -6,11 +6,11 @@
       order: 1,
       name: '直线校准',
       focus: '基础瞄准',
-      hint: '第一关只考验方向和力度：让球从 A 点直线碰到 B 点。',
+      hint: '第一关只考验方向：力度固定为 700，让球从 A 点直线碰到 B 点。',
       requiredMechanics: [],
       target: { x: 812, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 124, y: 300, angle: 0, power: 620 },
+        { id: 'A1', x: 124, y: 300, angle: 0, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [],
@@ -24,7 +24,7 @@
       requiredMechanics: ['wallBounce'],
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 500, angle: -41, power: 780 },
+        { id: 'A1', x: 120, y: 500, angle: -42, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -40,7 +40,7 @@
       requiredMechanics: ['wallBounce'],
       target: { x: 820, y: 420, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 120, angle: 39, power: 760 },
+        { id: 'A1', x: 120, y: 120, angle: 39, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -50,20 +50,20 @@
     },
     {
       order: 4,
-      name: '窄门力度',
-      focus: '力度控制',
-      hint: '通过中间窄门，力度太小会停下，太大容易连续反弹偏离。',
+      name: '窄门角度',
+      focus: '固定力度角度',
+      hint: '力度固定为 700，只需要调整角度，让球稳定穿过错位窄门。',
       requiredMechanics: [],
       target: { x: 836, y: 330, radius: 17 },
       launchers: [
-        { id: 'A1', x: 116, y: 272, angle: 5, power: 545 },
+        { id: 'A1', x: 116, y: 272, angle: 5, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
         { id: 'gate-1-top', role: 'gate', purpose: '形成第一道窄门上沿，限制偏高路线。', x: 348, y: 36, width: 46, height: 224 },
         { id: 'gate-1-bottom', role: 'gate', purpose: '形成第一道窄门下沿，限制偏低路线。', x: 348, y: 330, width: 46, height: 234 },
-        { id: 'gate-2-top', role: 'gate', purpose: '形成第二道错位窄门上沿，要求角度和力度同时稳定。', x: 590, y: 36, width: 42, height: 260 },
-        { id: 'gate-2-bottom', role: 'gate', purpose: '形成第二道错位窄门下沿，要求角度和力度同时稳定。', x: 590, y: 366, width: 42, height: 198 },
+        { id: 'gate-2-top', role: 'gate', purpose: '形成第二道错位窄门上沿，要求角度稳定。', x: 590, y: 36, width: 42, height: 260 },
+        { id: 'gate-2-bottom', role: 'gate', purpose: '形成第二道错位窄门下沿，要求角度稳定。', x: 590, y: 366, width: 42, height: 198 },
       ],
       portals: [],
     },
@@ -75,7 +75,7 @@
       requiredMechanics: ['wallBounce'],
       target: { x: 812, y: 142, radius: 18 },
       launchers: [
-        { id: 'A1', x: 142, y: 500, angle: -29, power: 760 },
+        { id: 'A1', x: 142, y: 500, angle: -29, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -92,7 +92,7 @@
       requiredMechanics: ['portal'],
       target: { x: 838, y: 412, radius: 18 },
       launchers: [
-        { id: 'A1', x: 118, y: 300, angle: -60, power: 500 },
+        { id: 'A1', x: 118, y: 300, angle: -60, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -112,7 +112,7 @@
       requiredMechanics: ['wallBounce', 'portal'],
       target: { x: 832, y: 456, radius: 18 },
       launchers: [
-        { id: 'A1', x: 126, y: 116, angle: -72, power: 650 },
+        { id: 'A1', x: 126, y: 116, angle: 14, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -128,14 +128,14 @@
       order: 8,
       name: '中继发射',
       focus: '二段发射',
-      hint: '把球打进 R1。R1 会按自己的方向和力度再发射一次。',
+      hint: '把球打进 R1。R1 会按自己的方向，以固定 700 力度再发射一次。',
       requiredMechanics: ['relay'],
       target: { x: 836, y: 250, radius: 18 },
       launchers: [
-        { id: 'A1', x: 118, y: 450, angle: -24, power: 650 },
+        { id: 'A1', x: 118, y: 450, angle: -24, power: 700 },
       ],
       relayLaunchers: [
-        { id: 'R1', x: 420, y: 316, radius: 24, angle: -9, power: 610, movable: false, purpose: '第一枚中继发射器，把球从左下路线转接到右侧目标。' },
+        { id: 'R1', x: 420, y: 316, radius: 24, angle: -9, power: 700, movable: false, purpose: '第一枚中继发射器，把球从左下路线转接到右侧目标。' },
       ],
       obstacles: [
         { id: 'relay-lane-wall', role: 'blocker', purpose: '挡住 A1 直达 B 的路线，让玩家必须先进入 R1。', x: 536, y: 336, width: 46, height: 148 },
@@ -153,7 +153,7 @@
         { id: 'A1', x: 118, y: 500, angle: -25, power: 700 },
       ],
       relayLaunchers: [
-        { id: 'R1', x: 380, y: 378, radius: 24, angle: -29, power: 620, movable: false, purpose: '承接第一段斜线，再把球送入传送入口。' },
+        { id: 'R1', x: 380, y: 378, radius: 24, angle: -29, power: 700, movable: false, purpose: '承接第一段斜线，再把球送入传送入口。' },
       ],
       obstacles: [
         { id: 'top-route-lock', role: 'blocker', purpose: '封锁 A1 上方直达路线。', x: 320, y: 36, width: 42, height: 286 },
@@ -172,10 +172,10 @@
       requiredMechanics: ['relay', 'portal'],
       target: { x: 846, y: 420, radius: 17 },
       launchers: [
-        { id: 'A1', x: 118, y: 510, angle: -23, power: 820 },
+        { id: 'A1', x: 118, y: 510, angle: -23, power: 700 },
       ],
       relayLaunchers: [
-        { id: 'R1', x: 402, y: 385, radius: 24, angle: -17, power: 710, movable: false, purpose: '把第一段路线转接到传送入口。' },
+        { id: 'R1', x: 402, y: 385, radius: 24, angle: -17, power: 700, movable: false, purpose: '把第一段路线转接到传送入口。' },
       ],
       obstacles: [
         { id: 'left-lock-wall', role: 'blocker', purpose: '阻断从左侧直接横穿的路线。', x: 294, y: 36, width: 44, height: 330 },
@@ -196,7 +196,7 @@
       requiredMechanics: ['switchDoor'],
       target: { x: 826, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 300, angle: 0, power: 620 },
+        { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -219,7 +219,7 @@
       requiredMechanics: ['switchDoor', 'wallBounce'],
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 500, angle: -41, power: 780 },
+        { id: 'A1', x: 120, y: 500, angle: -41, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -241,7 +241,7 @@
       requiredMechanics: ['switchDoor'],
       target: { x: 826, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 300, angle: 0, power: 620 },
+        { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -263,7 +263,7 @@
       requiredMechanics: ['switchDoor', 'portal'],
       target: { x: 826, y: 420, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 300, angle: 0, power: 620 },
+        { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -284,14 +284,14 @@
       order: 15,
       name: '中继红门',
       focus: '开关与子发射器',
-      hint: '第一段先开红门并进入 R1，R1 位置和力度固定，只能调整方向完成最后一段。',
+      hint: '第一段先开红门并进入 R1，R1 位置固定，力度为 700，只能调整方向完成最后一段。',
       requiredMechanics: ['switchDoor', 'relay'],
       target: { x: 836, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 450, angle: -24, power: 650 },
+        { id: 'A1', x: 120, y: 450, angle: -24, power: 700 },
       ],
       relayLaunchers: [
-        { id: 'R1', x: 420, y: 316, radius: 24, angle: 0, power: 610, movable: false, purpose: '固定位置和固定力度的子发射器，承接开关门后的路线。' },
+        { id: 'R1', x: 420, y: 316, radius: 24, angle: 0, power: 700, movable: false, purpose: '固定位置和固定力度的子发射器，承接开关门后的路线。' },
       ],
       obstacles: [
         { id: 'relay-wall', role: 'blocker', purpose: '挡住 A1 直接进目标的路线，要求先进入 R1。', x: 520, y: 336, width: 42, height: 130 },
@@ -301,6 +301,22 @@
       ],
       doors: [
         { id: 'red-door-1', color: 'red', purpose: '按钮触发后打开，允许 R1 后半段路线通过。', x: 620, y: 220, width: 42, height: 160 },
+      ],
+      portals: [],
+    },
+    {
+      order: 16,
+      name: '咖啡禁区',
+      focus: '卸力墙禁区',
+      hint: '咖啡色卸力墙会吃掉球的速度，碰到就会停住。绕开它，用墙面反弹命中 B 点。',
+      requiredMechanics: ['wallBounce'],
+      target: { x: 820, y: 300, radius: 18 },
+      launchers: [
+        { id: 'A1', x: 120, y: 300, angle: -37, power: 700 },
+      ],
+      relayLaunchers: [],
+      obstacles: [
+        { id: 'sticky-deadzone', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，碰到后球会停住，用来封锁危险直达区域。', x: 395, y: 245, width: 170, height: 110 },
       ],
       portals: [],
     },

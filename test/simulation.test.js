@@ -100,6 +100,17 @@ test('triangle boost obstacle can increase reflected speed', () => {
   assert.ok(after > before);
 });
 
+test('sticky obstacle absorbs the ball instead of reflecting it', () => {
+  const ball = createBall({ x: 88, y: 100, vx: 180, vy: 0, radius: 10 });
+  const obstacle = { shape: 'rect', x: 96, y: 80, width: 80, height: 40, material: 'sticky' };
+
+  const collided = resolveShapedObstacleBounce(ball, obstacle, 0.94);
+
+  assert.equal(collided, true);
+  assert.equal(ball.vx, 0);
+  assert.equal(ball.vy, 0);
+});
+
 test('stepBall applies velocity in seconds and decays cooldowns', () => {
   const ball = createBall({ x: 10, y: 20, vx: 30, vy: -10, radius: 6 });
   ball.portalCooldown = 0.5;

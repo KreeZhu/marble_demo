@@ -21,6 +21,7 @@
   const canvas = document.querySelector('#game');
   const ctx = canvas.getContext('2d');
   const customStorageKey = 'pinballSandboxCustomLevels.v1';
+  const fixedLauncherPower = 700;
   canvas.tabIndex = 0;
 
   const ui = {
@@ -90,6 +91,8 @@
     metalDark: '#303943',
     boost: '#d96cff',
     boostCore: '#67f0ff',
+    sticky: '#8a5a34',
+    stickyDark: '#3f2515',
     moving: '#ffbf47',
     start: '#41d692',
     target: '#41d692',
@@ -178,16 +181,16 @@
             x: launcher.x || 124,
             y: launcher.y || 300,
             angle: Number.isFinite(launcher.angle) ? launcher.angle : 0,
-            power: launcher.power || 620,
+            power: fixedLauncherPower,
           }))
-        : [{ id: 'A1', x: 124, y: 300, angle: 0, power: 620 }],
+        : [{ id: 'A1', x: 124, y: 300, angle: 0, power: fixedLauncherPower }],
       relayLaunchers: (level.relayLaunchers || []).map((relay, relayIndex) => ({
         id: relay.id || `R${relayIndex + 1}`,
         x: relay.x || 420,
         y: relay.y || 316,
         radius: relay.radius || 24,
         angle: Number.isFinite(relay.angle) ? relay.angle : 0,
-        power: relay.power || 600,
+        power: fixedLauncherPower,
         movable: true,
         purpose: relay.purpose || '自定义中继发射器。',
       })),
@@ -247,7 +250,7 @@
       id: freshId('draft'),
       name: '我的关卡',
       target: { x: 820, y: 300, radius: 18 },
-      launchers: [{ id: 'A1', x: 128, y: 300, angle: 0, power: 620 }],
+      launchers: [{ id: 'A1', x: 128, y: 300, angle: 0, power: fixedLauncherPower }],
       relayLaunchers: [],
       obstacles: [],
       switches: [],
@@ -278,8 +281,8 @@
       id: level.id || freshId('draft'),
       name: level.name || '我的关卡',
       target: { ...level.target },
-      launchers: level.launchers.map((launcher) => ({ ...launcher })),
-      relayLaunchers: (level.relayLaunchers || []).map((relay) => ({ ...relay, movable: true })),
+      launchers: level.launchers.map((launcher) => ({ ...launcher, power: fixedLauncherPower })),
+      relayLaunchers: (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower, movable: true })),
       obstacles: level.obstacles.map((obstacle) => ({ ...obstacle, path: obstacle.path ? { ...obstacle.path } : undefined })),
       switches: (level.switches || []).map((switchItem) => ({ ...switchItem, activated: false })),
       doors: (level.doors || []).map((door) => ({ ...door, open: false })),
@@ -300,6 +303,7 @@
   }
 
   function obstacleRestitution(obstacle) {
+    if (obstacle.material === 'sticky') return 0;
     return obstacle.material === 'boost' ? 1.22 : 0.94;
   }
 
@@ -336,11 +340,11 @@
   }
 
   function cloneLevelLaunchers(level) {
-    return level.launchers.map((launcher) => ({ ...launcher }));
+    return level.launchers.map((launcher) => ({ ...launcher, power: fixedLauncherPower }));
   }
 
   function cloneRelayLaunchers(level) {
-    return (level.relayLaunchers || []).map((launcher) => ({ ...launcher }));
+    return (level.relayLaunchers || []).map((launcher) => ({ ...launcher, power: fixedLauncherPower }));
   }
 
   function cloneSwitches(level) {
@@ -446,8 +450,9 @@
 
   function syncControlsFromLauncher() {
     const launcher = selectedLauncher();
+    launcher.power = fixedLauncherPower;
     ui.angle.value = String(Math.round(launcher.angle));
-    ui.power.value = String(Math.round(launcher.power));
+    ui.power.value = String(fixedLauncherPower);
     ui.previewLength.value = String(state.previewDistance);
   }
 
@@ -480,7 +485,8 @@
     ui.launcherName.textContent = launcher.id;
     ui.openMenu.textContent = '返回关卡菜单';
     ui.angleValue.textContent = `${Math.round(launcher.angle)}°`;
-    ui.powerValue.textContent = String(Math.round(launcher.power));
+    launcher.power = fixedLauncherPower;
+    ui.powerValue.textContent = String(fixedLauncherPower);
     ui.previewLengthValue.textContent = String(Math.round(state.previewDistance));
     ui.power.disabled = state.selectedDeviceType === 'relay';
     ui.prevLevel.disabled = Boolean(state.testLevel) || state.levelIndex === 0;
@@ -496,7 +502,7 @@
       button.addEventListener('click', () => {
         if (state.ball && state.ball.active) return;
         selectStartLauncher(index);
-        setStatus(`${item.id} 已选中。拖动空白处调整方向和力度。`, 'var(--blue)');
+        setStatus(`${item.id} 已选中。拖动画布调整方向，力度固定为 700。`, 'var(--blue)');
       });
       ui.launcherButtons.append(button);
     });
@@ -508,7 +514,7 @@
       button.addEventListener('click', () => {
         if (state.ball && state.ball.active) return;
         selectRelayLauncher(index);
-        setStatus(`${item.id} 已选中。它的位置和力度固定，只能调整射击方向。`, 'var(--amber)');
+        setStatus(`${item.id} 已选中。它的位置固定，只能调整方向，力度固定为 700。`, 'var(--amber)');
       });
       ui.launcherButtons.append(button);
     });
@@ -661,6 +667,7 @@
     if (state.completed) return;
     ensureAudio();
     const launcher = shotLauncher();
+    launcher.power = fixedLauncherPower;
     const vector = launcherVector(launcher);
     state.ball = createBall({
       x: launcher.x,
@@ -713,11 +720,8 @@
     const launcher = selectedLauncher();
     const point = screenToWorld(event);
     const angle = Math.atan2(point.y - launcher.y, point.x - launcher.x) * 180 / Math.PI;
-    const distance = Math.hypot(point.x - launcher.x, point.y - launcher.y);
     launcher.angle = Math.round(clamp(angle, -180, 180));
-    if (state.selectedDeviceType !== 'relay') {
-      launcher.power = Math.round(clamp(distance * 2.1, Number(ui.power.min), Number(ui.power.max)));
-    }
+    launcher.power = fixedLauncherPower;
     syncControlsFromLauncher();
     syncUi();
   }
@@ -745,14 +749,24 @@
     if (wallBounced && state.shotEvents) state.shotEvents.wallBounces += 1;
 
     let obstacleBounced = false;
+    let stickyHit = false;
     state.obstacles.concat(activeDoorObstacles()).forEach((obstacle) => {
       const hitObstacle = resolveShapedObstacleBounce(state.ball, obstacle, obstacleRestitution(obstacle));
       if (hitObstacle && state.shotEvents) {
         state.shotEvents.obstacleBounces.add(obstacle.id);
         if (obstacle.path) state.shotEvents.hitMovingObstacle = true;
       }
+      if (hitObstacle && obstacle.material === 'sticky') stickyHit = true;
       obstacleBounced = hitObstacle || obstacleBounced;
     });
+
+    if (stickyHit) {
+      state.ball.active = false;
+      setStatus('碰到咖啡色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
+      playSound('impact');
+      syncUi();
+      return;
+    }
 
     const switchHit = updateSwitchHits(state.ball);
 
@@ -804,7 +818,7 @@
 
     if (Math.hypot(state.ball.vx, state.ball.vy) < 28) {
       state.ball.active = false;
-      setStatus('球停下了。调整方向或力度再试一次。', 'var(--red)');
+      setStatus('球停下了。调整方向再试一次。', 'var(--red)');
       syncUi();
     }
   }
@@ -823,9 +837,16 @@
       const previous = { x: ball.x, y: ball.y };
       stepBall(ball, dt);
       resolveWallBounce(ball, arena, 0.96);
+      let previewStickyHit = false;
       previewObstacles.concat(activeDoorObstacles(previewDoors)).forEach((obstacle) => {
-        resolveShapedObstacleBounce(ball, obstacle, obstacleRestitution(obstacle));
+        if (resolveShapedObstacleBounce(ball, obstacle, obstacleRestitution(obstacle)) && obstacle.material === 'sticky') {
+          previewStickyHit = true;
+        }
       });
+      if (previewStickyHit) {
+        points.push({ x: ball.x, y: ball.y });
+        break;
+      }
       updateSwitchHits(ball, previewSwitches, previewDoors, null);
       const teleported = tryTeleport(ball, levelData.portals);
       if (teleported) points.push({ break: true });
@@ -1004,6 +1025,7 @@
 
   function obstacleColor(obstacle) {
     if (obstacle.material === 'boost') return art.boost;
+    if (obstacle.material === 'sticky') return art.sticky;
     if (obstacle.path) return art.moving;
     return art.metal;
   }
@@ -1029,28 +1051,38 @@
 
   function drawObstacleShape(obstacle, fillStyle) {
     const bounds = obstacleBounds(obstacle);
+    const isBoost = obstacle.material === 'boost';
+    const isSticky = obstacle.material === 'sticky';
     const gradient = ctx.createLinearGradient(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height);
     gradient.addColorStop(0, fillStyle);
-    gradient.addColorStop(1, obstacle.material === 'boost' ? '#6735a8' : art.metalDark);
+    gradient.addColorStop(1, isBoost ? '#6735a8' : isSticky ? art.stickyDark : art.metalDark);
     ctx.fillStyle = gradient;
     traceObstacleShape(obstacle);
     ctx.fill();
-    ctx.strokeStyle = obstacle.material === 'boost' ? 'rgba(103,240,255,0.75)' : 'rgba(244,247,251,0.24)';
-    ctx.lineWidth = 2;
+    ctx.strokeStyle = isBoost ? 'rgba(103,240,255,0.75)' : isSticky ? 'rgba(255, 214, 150, 0.82)' : 'rgba(244,247,251,0.24)';
+    ctx.lineWidth = isSticky ? 3 : 2;
     ctx.stroke();
 
     ctx.save();
     traceObstacleShape(obstacle);
     ctx.clip();
-    ctx.globalAlpha = obstacle.material === 'boost' ? 0.82 : 0.36;
-    ctx.strokeStyle = obstacle.material === 'boost' ? art.boostCore : 'rgba(244,247,251,0.28)';
-    ctx.lineWidth = obstacle.material === 'boost' ? 3 : 1;
-    const step = obstacle.material === 'boost' ? 22 : 18;
+    ctx.globalAlpha = isBoost ? 0.82 : isSticky ? 0.72 : 0.36;
+    ctx.strokeStyle = isBoost ? art.boostCore : isSticky ? 'rgba(46, 26, 13, 0.72)' : 'rgba(244,247,251,0.28)';
+    ctx.lineWidth = isBoost ? 3 : isSticky ? 4 : 1;
+    const step = isBoost ? 22 : isSticky ? 20 : 18;
     for (let x = bounds.x - bounds.height; x < bounds.x + bounds.width + bounds.height; x += step) {
       ctx.beginPath();
       ctx.moveTo(x, bounds.y + bounds.height + 8);
       ctx.lineTo(x + bounds.height, bounds.y - 8);
       ctx.stroke();
+    }
+    if (isSticky) {
+      ctx.globalAlpha = 0.86;
+      ctx.fillStyle = 'rgba(255, 214, 150, 0.78)';
+      ctx.font = `800 ${Math.max(13, Math.min(22, bounds.height * 0.42))}px Microsoft YaHei, Segoe UI, sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText('停', bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 1);
     }
     if (obstacle.path) {
       ctx.globalAlpha = 0.9;
@@ -1087,8 +1119,8 @@
         ctx.arc(originX + centerOffsetX + obstacle.path.x, originY + centerOffsetY + obstacle.path.y, 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowColor = obstacle.material === 'boost' ? art.boost : (moving ? art.moving : '#000');
-      ctx.shadowBlur = obstacle.material === 'boost' ? 12 : (moving ? 8 : 2);
+      ctx.shadowColor = obstacle.material === 'boost' ? art.boost : obstacle.material === 'sticky' ? art.sticky : (moving ? art.moving : '#000');
+      ctx.shadowBlur = obstacle.material === 'boost' ? 12 : obstacle.material === 'sticky' ? 9 : (moving ? 8 : 2);
       drawObstacleShape(obstacle, obstacleColor(obstacle));
       if (active) {
         ctx.strokeStyle = '#f4f7fb';
@@ -1432,7 +1464,7 @@
     const rectVisible = (hasObject && state.editor.selected.type === 'obstacle') || doorVisible;
     const movingVisible = rectVisible && object.path;
     document.querySelectorAll('.angle-prop').forEach((node) => node.classList.toggle('hidden', !angleVisible));
-    document.querySelectorAll('.power-prop').forEach((node) => node.classList.toggle('hidden', !launcherVisible));
+    document.querySelectorAll('.power-prop').forEach((node) => node.classList.add('hidden'));
     document.querySelectorAll('.rect-prop').forEach((node) => node.classList.toggle('hidden', !rectVisible || circleVisible));
     document.querySelectorAll('.circle-prop').forEach((node) => node.classList.toggle('hidden', !circleVisible));
     document.querySelectorAll('.material-prop').forEach((node) => node.classList.toggle('hidden', !obstacleVisible));
@@ -1449,7 +1481,7 @@
       ui.editorMaterial.value = object.material || 'normal';
       ui.editorAngle.value = Math.round(object.angle || 0);
       if (state.editor.selected.type === 'portal') ui.editorAngle.value = Math.round((object.exitAngle || 0) * 180 / Math.PI);
-      ui.editorPower.value = Math.round(object.power || 620);
+      ui.editorPower.value = fixedLauncherPower;
       ui.editorPathX.value = Math.round(object.path?.x || 0);
       ui.editorPathY.value = Math.round(object.path?.y || 0);
       ui.editorSpeed.value = Number(object.speed || 1).toFixed(1);
@@ -1500,11 +1532,11 @@
     const draft = state.editor.draft;
     if (tool === 'start') {
       const id = `A${draft.launchers.length + 1}`;
-      draft.launchers.push({ id, x: 128, y: 220 + draft.launchers.length * 72, angle: 0, power: 620 });
+      draft.launchers.push({ id, x: 128, y: 220 + draft.launchers.length * 72, angle: 0, power: fixedLauncherPower });
       state.editor.selected = { type: 'launcher', index: draft.launchers.length - 1 };
     } else if (tool === 'relay') {
       const id = `R${draft.relayLaunchers.length + 1}`;
-      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: -10, power: 610, movable: true, purpose: '自定义中继发射器。' });
+      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: -10, power: fixedLauncherPower, movable: true, purpose: '自定义中继发射器。' });
       state.editor.selected = { type: 'relay', index: draft.relayLaunchers.length - 1 };
     } else if (tool === 'target') {
       draft.target = { x: 820, y: 300, radius: 18 };
@@ -1520,6 +1552,9 @@
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'boostWall') {
       draft.obstacles.push({ id: `boost-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'boost', purpose: '自定义高弹墙。', x: 410, y: 260, width: 120, height: 36 });
+      state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
+    } else if (tool === 'stickyWall') {
+      draft.obstacles.push({ id: `sticky-${draft.obstacles.length + 1}`, role: 'deadzone', shape: 'rect', material: 'sticky', purpose: '自定义卸力墙，碰到后球会停住。', x: 410, y: 260, width: 140, height: 42 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'redSwitch') {
       draft.switches.push({ id: `red-switch-${draft.switches.length + 1}`, color: 'red', x: 350, y: 300, radius: 18, activated: false, purpose: '红色按钮，被球击中后打开红色门。' });
@@ -1626,7 +1661,7 @@
     }
     if (state.editor.selected.type === 'launcher' || state.editor.selected.type === 'relay') {
       object.angle = Number(ui.editorAngle.value);
-      object.power = Number(ui.editorPower.value);
+      object.power = fixedLauncherPower;
     }
     if (state.editor.selected.type === 'portal') {
       object.exitAngle = Number(ui.editorAngle.value) * Math.PI / 180;
@@ -1772,12 +1807,8 @@
   });
   ui.power.addEventListener('input', () => {
     if (state.mode !== 'play') return;
-    if (state.selectedDeviceType === 'relay') {
-      syncControlsFromLauncher();
-      syncUi();
-      return;
-    }
-    selectedLauncher().power = Number(ui.power.value);
+    selectedLauncher().power = fixedLauncherPower;
+    syncControlsFromLauncher();
     syncUi();
   });
   ui.previewLength.addEventListener('input', () => {
@@ -1834,7 +1865,7 @@
     if (relayIndex >= 0) {
       selectRelayLauncher(relayIndex);
       state.dragMode = 'aim';
-      setStatus(`${state.relayLaunchers[relayIndex].id} 已选中。拖动调整方向，位置和力度固定。`, 'var(--amber)');
+      setStatus(`${state.relayLaunchers[relayIndex].id} 已选中。拖动调整方向，位置固定，力度固定为 700。`, 'var(--amber)');
       return;
     }
     state.dragMode = 'aim';
