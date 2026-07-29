@@ -11,6 +11,7 @@
     tryLauncherCapture,
     resolveObstacleBounce,
     resolveShapedObstacleBounce,
+    rotatedRectPoints,
     trianglePoints,
     updateMovingObstacle,
     clamp,
@@ -948,7 +949,16 @@
       ctx.lineTo(points[2].x, points[2].y);
       ctx.closePath();
     } else {
-      roundRectPath(obstacle.x, obstacle.y, obstacle.width, obstacle.height, 5);
+      if (obstacle.angle) {
+        const points = rotatedRectPoints(obstacle);
+        ctx.moveTo(points[0].x, points[0].y);
+        ctx.lineTo(points[1].x, points[1].y);
+        ctx.lineTo(points[2].x, points[2].y);
+        ctx.lineTo(points[3].x, points[3].y);
+        ctx.closePath();
+      } else {
+        roundRectPath(obstacle.x, obstacle.y, obstacle.width, obstacle.height, 5);
+      }
     }
   }
 
@@ -1156,6 +1166,17 @@
         height: Math.max(...ys) - Math.min(...ys),
       };
     }
+    if (obstacle.angle) {
+      const points = rotatedRectPoints(obstacle);
+      const xs = points.map((point) => point.x);
+      const ys = points.map((point) => point.y);
+      return {
+        x: Math.min(...xs),
+        y: Math.min(...ys),
+        width: Math.max(...xs) - Math.min(...xs),
+        height: Math.max(...ys) - Math.min(...ys),
+      };
+    }
     return { x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height };
   }
 
@@ -1199,6 +1220,21 @@
       ctx.fillStyle = 'rgba(7, 18, 13, 0.42)';
       ctx.beginPath();
       ctx.arc(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, Math.min(12, bounds.width / 3, bounds.height / 3), 0, Math.PI * 2);
+      ctx.fill();
+    }
+    if (obstacle.shape === 'circle') {
+      const radius = obstacle.radius || 28;
+      const angle = (obstacle.angle || 0) * Math.PI / 180;
+      ctx.globalAlpha = 0.88;
+      ctx.strokeStyle = obstacle.material === 'boost' ? art.boostCore : 'rgba(244,247,251,0.58)';
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.moveTo(obstacle.x, obstacle.y);
+      ctx.lineTo(obstacle.x + Math.cos(angle) * radius * 0.72, obstacle.y + Math.sin(angle) * radius * 0.72);
+      ctx.stroke();
+      ctx.fillStyle = ctx.strokeStyle;
+      ctx.beginPath();
+      ctx.arc(obstacle.x + Math.cos(angle) * radius * 0.78, obstacle.y + Math.sin(angle) * radius * 0.78, 3.5, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -1624,7 +1660,7 @@
     const circleVisible = (obstacleVisible && object.shape === 'circle') || switchVisible;
     const angleVisible = launcherVisible ||
       (hasObject && state.editor.selected.type === 'portal') ||
-      (obstacleVisible && object.shape === 'triangle');
+      obstacleVisible;
     const rectVisible = (hasObject && state.editor.selected.type === 'obstacle') || doorVisible;
     const movingVisible = rectVisible && object.path;
     document.querySelectorAll('.angle-prop').forEach((node) => node.classList.toggle('hidden', !angleVisible));
@@ -1678,14 +1714,29 @@
     if (object.shape === 'circle') {
       object.x = clamp(object.x, arena.x + radius, arena.x + arena.width - radius);
       object.y = clamp(object.y, arena.y + radius, arena.y + arena.height - radius);
+      return;
     } else if (object.shape === 'triangle') {
-      const halfWidth = (object.width || 96) / 2;
-      const halfHeight = (object.height || 84) / 2;
-      object.x = clamp(object.x, arena.x + halfWidth, arena.x + arena.width - halfWidth);
-      object.y = clamp(object.y, arena.y + halfHeight, arena.y + arena.height - halfHeight);
+      const bounds = obstacleBounds(object);
+      if (bounds.x < arena.x) object.x += arena.x - bounds.x;
+      if (bounds.y < arena.y) object.y += arena.y - bounds.y;
+      if (bounds.x + bounds.width > arena.x + arena.width) object.x -= bounds.x + bounds.width - arena.x - arena.width;
+      if (bounds.y + bounds.height > arena.y + arena.height) object.y -= bounds.y + bounds.height - arena.y - arena.height;
+      return;
     } else if (object.width && object.height) {
-      object.x = clamp(object.x, arena.x, arena.x + arena.width - object.width);
-      object.y = clamp(object.y, arena.y, arena.y + arena.height - object.height);
+      const bounds = obstacleBounds(object);
+      if (bounds.width <= arena.width) {
+        if (bounds.x < arena.x) object.x += arena.x - bounds.x;
+        if (bounds.x + bounds.width > arena.x + arena.width) object.x -= bounds.x + bounds.width - arena.x - arena.width;
+      } else {
+        object.x = arena.x + (arena.width - object.width) / 2;
+      }
+      if (bounds.height <= arena.height) {
+        if (bounds.y < arena.y) object.y += arena.y - bounds.y;
+        if (bounds.y + bounds.height > arena.y + arena.height) object.y -= bounds.y + bounds.height - arena.y - arena.height;
+      } else {
+        object.y = arena.y + (arena.height - object.height) / 2;
+      }
+      return;
     } else {
       object.x = clamp(object.x, arena.x + radius, arena.x + arena.width - radius);
       object.y = clamp(object.y, arena.y + radius, arena.y + arena.height - radius);
@@ -1706,19 +1757,19 @@
       draft.target = { x: 820, y: 300, radius: 18 };
       state.editor.selected = { type: 'target', index: 0 };
     } else if (tool === 'wall') {
-      draft.obstacles.push({ id: `wall-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'normal', purpose: '自定义墙。', x: 410, y: 260, width: 120, height: 36 });
+      draft.obstacles.push({ id: `wall-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'normal', purpose: '自定义墙。', x: 410, y: 260, width: 120, height: 36, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'triangleWall') {
       draft.obstacles.push({ id: `tri-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'triangle', material: 'normal', purpose: '自定义三角墙。', x: 470, y: 300, width: 110, height: 92, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'circleWall') {
-      draft.obstacles.push({ id: `circle-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'circle', material: 'normal', purpose: '自定义圆形墙。', x: 470, y: 300, radius: 34, width: 68, height: 68 });
+      draft.obstacles.push({ id: `circle-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'circle', material: 'normal', purpose: '自定义圆形墙。', x: 470, y: 300, radius: 34, width: 68, height: 68, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'boostWall') {
-      draft.obstacles.push({ id: `boost-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'boost', purpose: '自定义高弹墙。', x: 410, y: 260, width: 120, height: 36 });
+      draft.obstacles.push({ id: `boost-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'boost', purpose: '自定义高弹墙。', x: 410, y: 260, width: 120, height: 36, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'stickyWall') {
-      draft.obstacles.push({ id: `sticky-${draft.obstacles.length + 1}`, role: 'deadzone', shape: 'rect', material: 'sticky', purpose: '自定义卸力墙，碰到后球会停住。', x: 410, y: 260, width: 140, height: 42 });
+      draft.obstacles.push({ id: `sticky-${draft.obstacles.length + 1}`, role: 'deadzone', shape: 'rect', material: 'sticky', purpose: '自定义卸力墙，碰到后球会停住。', x: 410, y: 260, width: 140, height: 42, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'redSwitch') {
       draft.switches.push({ id: `red-switch-${draft.switches.length + 1}`, color: 'red', x: 350, y: 300, radius: 18, activated: false, purpose: '红色按钮，被球击中后打开红色门。' });
@@ -1727,7 +1778,7 @@
       draft.doors.push({ id: `red-door-${draft.doors.length + 1}`, color: 'red', x: 560, y: 218, width: 40, height: 176, open: false, shape: 'rect', material: 'normal', purpose: '红色门，红色按钮触发后打开。' });
       state.editor.selected = { type: 'door', index: draft.doors.length - 1 };
     } else if (tool === 'moving') {
-      draft.obstacles.push({ id: `moving-${draft.obstacles.length + 1}`, role: 'movingGate', shape: 'rect', material: 'normal', purpose: '自定义移动机关。', x: 450, y: 240, width: 110, height: 28, path: { x: 0, y: 130 }, speed: 1, phase: 0 });
+      draft.obstacles.push({ id: `moving-${draft.obstacles.length + 1}`, role: 'movingGate', shape: 'rect', material: 'normal', purpose: '自定义移动机关。', x: 450, y: 240, width: 110, height: 28, angle: 0, path: { x: 0, y: 130 }, speed: 1, phase: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'portal') {
       const pair = draft.portals.length / 2 + 1;
@@ -1776,11 +1827,30 @@
       if (obstacle.shape === 'triangle' && point.x >= bounds.x && point.x <= bounds.x + bounds.width && point.y >= bounds.y && point.y <= bounds.y + bounds.height) {
         return { type: 'obstacle', index: i };
       }
-      if (obstacle.shape !== 'circle' && obstacle.shape !== 'triangle' && point.x >= obstacle.x && point.x <= obstacle.x + obstacle.width && point.y >= obstacle.y && point.y <= obstacle.y + obstacle.height) {
+      if (
+        obstacle.shape !== 'circle' &&
+        obstacle.shape !== 'triangle' &&
+        pointInRotatedRect(point, obstacle)
+      ) {
         return { type: 'obstacle', index: i };
       }
     }
     return null;
+  }
+
+  function pointInRotatedRect(point, obstacle) {
+    const width = obstacle.width || 90;
+    const height = obstacle.height || 34;
+    const cx = obstacle.x + width / 2;
+    const cy = obstacle.y + height / 2;
+    const angle = (obstacle.angle || 0) * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - cx;
+    const dy = point.y - cy;
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    return Math.abs(localX) <= width / 2 + 8 && Math.abs(localY) <= height / 2 + 8;
   }
 
   function moveEditorSelection(point) {
@@ -1807,9 +1877,7 @@
         object.width = Number(ui.editorWidth.value);
         object.height = Number(ui.editorHeight.value);
       }
-      if (object.shape === 'triangle') {
-        object.angle = Number(ui.editorAngle.value);
-      }
+      object.angle = Number(ui.editorAngle.value);
       if (object.path) {
         object.path.x = Number(ui.editorPathX.value);
         object.path.y = Number(ui.editorPathY.value);

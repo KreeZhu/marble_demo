@@ -112,6 +112,23 @@ test('moving obstacle collision reflects the ball using the nearest face', () =>
   assert.equal(ball.x, 216);
 });
 
+test('rotated rectangle obstacle reflects from the rotated face', () => {
+  const ball = createBall({
+    x: 173.94,
+    y: 133.94,
+    vx: -127.3,
+    vy: -127.3,
+    radius: 10,
+  });
+  const obstacle = { shape: 'rect', x: 100, y: 80, width: 80, height: 40, angle: 45 };
+
+  const collided = resolveShapedObstacleBounce(ball, obstacle, 1);
+
+  assert.equal(collided, true);
+  assert.ok(ball.vx > 0);
+  assert.ok(ball.vy > 0);
+});
+
 test('circle obstacle collision reflects from the obstacle center', () => {
   const ball = createBall({ x: 132, y: 100, vx: -160, vy: 0, radius: 10 });
   const obstacle = { shape: 'circle', x: 100, y: 100, radius: 24 };

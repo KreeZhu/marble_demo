@@ -163,6 +163,8 @@
   }
 
   function resolveObstacleBounce(ball, rect, restitution = 1) {
+    if (rect.angle) return resolveRotatedRectObstacleBounce(ball, rect, restitution);
+
     const nearestX = clamp(ball.x, rect.x, rect.x + rect.width);
     const nearestY = clamp(ball.y, rect.y, rect.y + rect.height);
     const dx = ball.x - nearestX;
@@ -208,6 +210,90 @@
       ball.vy = (rvy - 2 * dot * ny) * restitution + obstacleVy;
     }
 
+    return true;
+  }
+
+  function rotatedRectPoints(rect) {
+    const width = rect.width || 90;
+    const height = rect.height || 34;
+    const cx = rect.x + width / 2;
+    const cy = rect.y + height / 2;
+    const angle = (rect.angle || 0) * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const local = [
+      { x: -width / 2, y: -height / 2 },
+      { x: width / 2, y: -height / 2 },
+      { x: width / 2, y: height / 2 },
+      { x: -width / 2, y: height / 2 },
+    ];
+
+    return local.map((point) => ({
+      x: cx + point.x * cos - point.y * sin,
+      y: cy + point.x * sin + point.y * cos,
+    }));
+  }
+
+  function resolveRotatedRectObstacleBounce(ball, rect, restitution = 1) {
+    const width = rect.width || 90;
+    const height = rect.height || 34;
+    const halfWidth = width / 2;
+    const halfHeight = height / 2;
+    const cx = rect.x + halfWidth;
+    const cy = rect.y + halfHeight;
+    const angle = (rect.angle || 0) * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = ball.x - cx;
+    const dy = ball.y - cy;
+    const localX = dx * cos + dy * sin;
+    const localY = -dx * sin + dy * cos;
+    const nearestX = clamp(localX, -halfWidth, halfWidth);
+    const nearestY = clamp(localY, -halfHeight, halfHeight);
+    const deltaX = localX - nearestX;
+    const deltaY = localY - nearestY;
+    const distSq = deltaX * deltaX + deltaY * deltaY;
+
+    if (distSq > ball.radius * ball.radius) return false;
+
+    let nx = 0;
+    let ny = 0;
+    let resolvedX = localX;
+    let resolvedY = localY;
+
+    if (distSq > EPSILON) {
+      const dist = Math.sqrt(distSq);
+      nx = deltaX / dist;
+      ny = deltaY / dist;
+      resolvedX = nearestX + nx * ball.radius;
+      resolvedY = nearestY + ny * ball.radius;
+    } else {
+      const leftDist = Math.abs(localX + halfWidth);
+      const rightDist = Math.abs(halfWidth - localX);
+      const topDist = Math.abs(localY + halfHeight);
+      const bottomDist = Math.abs(halfHeight - localY);
+      const min = Math.min(leftDist, rightDist, topDist, bottomDist);
+
+      if (min === leftDist) {
+        nx = -1;
+        resolvedX = -halfWidth - ball.radius;
+      } else if (min === rightDist) {
+        nx = 1;
+        resolvedX = halfWidth + ball.radius;
+      } else if (min === topDist) {
+        ny = -1;
+        resolvedY = -halfHeight - ball.radius;
+      } else {
+        ny = 1;
+        resolvedY = halfHeight + ball.radius;
+      }
+    }
+
+    const worldNx = nx * cos - ny * sin;
+    const worldNy = nx * sin + ny * cos;
+    ball.x = cx + resolvedX * cos - resolvedY * sin;
+    ball.y = cy + resolvedX * sin + resolvedY * cos;
+    reflectBallFromNormal(ball, worldNx, worldNy, rect, restitution);
     return true;
   }
 
@@ -349,9 +435,11 @@
     tryRelayLaunch,
     tryLauncherCapture,
     resolveObstacleBounce,
+    resolveRotatedRectObstacleBounce,
     resolveCircleObstacleBounce,
     resolveTriangleObstacleBounce,
     resolveShapedObstacleBounce,
+    rotatedRectPoints,
     trianglePoints,
     updateMovingObstacle,
     clamp,
