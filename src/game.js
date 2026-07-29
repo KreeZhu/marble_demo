@@ -4,7 +4,7 @@
   const {
     createBall,
     stepBall,
-    resolveWallBounce,
+    resolveArenaWalls,
     targetHitThisFrame,
     tryTeleport,
     tryRelayLaunch,
@@ -86,6 +86,7 @@
   const soundVolume = 1.9;
   const relayColor = '#9b7cff';
   const relayGlow = 'rgba(155, 124, 255, 0.42)';
+  const stickyArenaWalls = { top: 'sticky', right: 'sticky', bottom: 'sticky', left: 'sticky' };
   const art = {
     metal: '#596977',
     metalDark: '#303943',
@@ -164,6 +165,19 @@
     window.localStorage.setItem(customStorageKey, JSON.stringify(state.customLevels));
   }
 
+  function normalizeArenaWalls(walls = stickyArenaWalls) {
+    const normalized = { ...stickyArenaWalls };
+    ['top', 'right', 'bottom', 'left'].forEach((side) => {
+      normalized[side] = walls && walls[side] === 'bounce' ? 'bounce' : 'sticky';
+    });
+    return normalized;
+  }
+
+  function arenaWallModes(levelData = level()) {
+    if (!levelData || !levelData.arenaWalls) return normalizeArenaWalls(stickyArenaWalls);
+    return normalizeArenaWalls(levelData.arenaWalls);
+  }
+
   function normalizeCustomLevel(level, index) {
     if (!level || !Array.isArray(level.launchers) || !level.target) return null;
     return {
@@ -174,6 +188,7 @@
       focus: '自定义布局',
       hint: '这是你保存的自定义关卡。调整发射器，让球碰到 B 点。',
       requiredMechanics: Array.isArray(level.requiredMechanics) ? level.requiredMechanics : [],
+      arenaWalls: normalizeArenaWalls(level.arenaWalls),
       target: { x: level.target.x || 812, y: level.target.y || 300, radius: level.target.radius || 18 },
       launchers: level.launchers.length > 0
         ? level.launchers.map((launcher, launcherIndex) => ({
@@ -256,6 +271,7 @@
       switches: [],
       doors: [],
       portals: [],
+      arenaWalls: normalizeArenaWalls(),
     };
   }
 
@@ -270,6 +286,7 @@
       switches: draft.switches,
       doors: draft.doors,
       portals: draft.portals,
+      arenaWalls: draft.arenaWalls,
       requiredMechanics: [],
     }, index);
     normalized.focus = '自定义布局';
@@ -287,6 +304,7 @@
       switches: (level.switches || []).map((switchItem) => ({ ...switchItem, activated: false })),
       doors: (level.doors || []).map((door) => ({ ...door, open: false })),
       portals: level.portals.map((portal) => ({ ...portal })),
+      arenaWalls: normalizeArenaWalls(level.arenaWalls),
     };
   }
 
@@ -745,8 +763,17 @@
 
     const previous = { x: state.ball.x, y: state.ball.y };
     stepBall(state.ball, dt);
-    const wallBounced = resolveWallBounce(state.ball, arena, 0.96);
+    const wallResult = resolveArenaWalls(state.ball, arena, arenaWallModes(current), 0.96);
+    const wallBounced = wallResult.bounced;
     if (wallBounced && state.shotEvents) state.shotEvents.wallBounces += 1;
+
+    if (wallResult.stuck) {
+      state.ball.active = false;
+      setStatus('碰到咖啡色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
+      playSound('impact');
+      syncUi();
+      return;
+    }
 
     let obstacleBounced = false;
     let stickyHit = false;
@@ -836,7 +863,11 @@
       previewObstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
       const previous = { x: ball.x, y: ball.y };
       stepBall(ball, dt);
-      resolveWallBounce(ball, arena, 0.96);
+      const wallResult = resolveArenaWalls(ball, arena, arenaWallModes(levelData), 0.96);
+      if (wallResult.stuck) {
+        points.push({ x: ball.x, y: ball.y });
+        break;
+      }
       let previewStickyHit = false;
       previewObstacles.concat(activeDoorObstacles(previewDoors)).forEach((obstacle) => {
         if (resolveShapedObstacleBounce(ball, obstacle, obstacleRestitution(obstacle)) && obstacle.material === 'sticky') {
@@ -913,7 +944,61 @@
     ctx.restore();
   }
 
-  function drawArena() {
+  function drawArenaWallSide(side, mode) {
+    const sticky = mode === 'sticky';
+    const color = sticky ? art.sticky : '#7e8e9d';
+    const glow = sticky ? 'rgba(138, 90, 52, 0.38)' : 'rgba(126, 142, 157, 0.18)';
+    const lineWidth = sticky ? 10 : 7;
+    const x1 = side === 'right' ? arena.x + arena.width : arena.x;
+    const y1 = side === 'bottom' ? arena.y + arena.height : arena.y;
+
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = sticky ? 12 : 4;
+    ctx.strokeStyle = color;
+    ctx.lineWidth = lineWidth;
+    ctx.beginPath();
+    if (side === 'top' || side === 'bottom') {
+      ctx.moveTo(arena.x, y1);
+      ctx.lineTo(arena.x + arena.width, y1);
+    } else {
+      ctx.moveTo(x1, arena.y);
+      ctx.lineTo(x1, arena.y + arena.height);
+    }
+    ctx.stroke();
+
+    if (sticky) {
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(255, 222, 180, 0.34)';
+      ctx.lineWidth = 2;
+      if (side === 'top' || side === 'bottom') {
+        const y = side === 'top' ? arena.y + 8 : arena.y + arena.height - 8;
+        for (let x = arena.x + 20; x < arena.x + arena.width - 8; x += 34) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(x + 16, side === 'top' ? y + 10 : y - 10);
+          ctx.stroke();
+        }
+      } else {
+        const x = side === 'left' ? arena.x + 8 : arena.x + arena.width - 8;
+        for (let y = arena.y + 20; y < arena.y + arena.height - 8; y += 34) {
+          ctx.beginPath();
+          ctx.moveTo(x, y);
+          ctx.lineTo(side === 'left' ? x + 10 : x - 10, y + 16);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.restore();
+  }
+
+  function drawArenaWallSides(levelData = level()) {
+    const modes = arenaWallModes(levelData);
+    ['top', 'right', 'bottom', 'left'].forEach((side) => drawArenaWallSide(side, modes[side]));
+  }
+
+  function drawArena(levelData = level()) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const background = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
     background.addColorStop(0, '#0d1116');
@@ -927,9 +1012,7 @@
     ctx.fillStyle = floor;
     ctx.fillRect(arena.x, arena.y, arena.width, arena.height);
     drawGrid();
-    ctx.strokeStyle = '#7e8e9d';
-    ctx.lineWidth = 7;
-    ctx.strokeRect(arena.x, arena.y, arena.width, arena.height);
+    drawArenaWallSides(levelData);
     ctx.strokeStyle = 'rgba(65, 214, 146, 0.16)';
     ctx.lineWidth = 1;
     ctx.strokeRect(arena.x + 12, arena.y + 12, arena.width - 24, arena.height - 24);
@@ -1358,13 +1441,15 @@
       ctx.fillText('编辑模式：拖动组件摆放，右侧可精确修改数值', arena.x + 16, arena.y + 24);
     } else {
       ctx.fillText('A 点发射器', arena.x + 16, arena.y + 24);
-      ctx.fillText(state.relayLaunchers.length > 0 ? 'R 是中继发射器：球碰进去后自动二次发射' : '墙壁可以反弹，后续关卡会加入传送门和移动物品', arena.x + 536, arena.y + arena.height - 18);
+      const stickySides = Object.values(arenaWallModes()).filter((mode) => mode === 'sticky').length;
+      const wallTip = stickySides > 0 ? '咖啡色外框会卸力，尽量不要碰边界' : '普通外框可以反弹';
+      ctx.fillText(state.relayLaunchers.length > 0 ? `R 是中继发射器：球碰进去后自动二次发射｜${wallTip}` : wallTip, arena.x + 424, arena.y + arena.height - 18);
     }
     ctx.restore();
   }
 
   function renderGame() {
-    drawArena();
+    drawArena(level());
     drawPreview();
     drawPortals();
     drawObstacles();
@@ -1388,7 +1473,7 @@
       vy: 0,
       phase: obstacle.phase || 0,
     }));
-    drawArena();
+    drawArena(draft);
     draft.launchers.forEach((launcher, index) => {
       drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers, { includeRelays: true }), '#41d692', 0.45);
       drawLauncherShape(launcher, '#41d692', launcher.id.replace('A', ''), selectedIs('launcher', index));

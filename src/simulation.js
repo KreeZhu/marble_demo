@@ -32,34 +32,56 @@
     ball.relayCooldown = Math.max(0, ball.relayCooldown - dt);
   }
 
-  function resolveWallBounce(ball, bounds, restitution = 1) {
+  function resolveArenaWalls(ball, bounds, wallModes = {}, restitution = 1) {
+    const modes = {
+      top: 'bounce',
+      right: 'bounce',
+      bottom: 'bounce',
+      left: 'bounce',
+      ...wallModes,
+    };
     const left = bounds.x + ball.radius;
     const right = bounds.x + bounds.width - ball.radius;
     const top = bounds.y + ball.radius;
     const bottom = bounds.y + bounds.height - ball.radius;
-    let bounced = false;
+    const result = {
+      hit: false,
+      bounced: false,
+      stuck: false,
+      sides: [],
+    };
+
+    function applyWall(side, setPosition, reflectVelocity) {
+      result.hit = true;
+      result.sides.push(side);
+      setPosition();
+      if (modes[side] === 'sticky') {
+        ball.vx = 0;
+        ball.vy = 0;
+        result.stuck = true;
+        return;
+      }
+      reflectVelocity();
+      result.bounced = true;
+    }
 
     if (ball.x < left) {
-      ball.x = left;
-      ball.vx = Math.abs(ball.vx) * restitution;
-      bounced = true;
+      applyWall('left', () => { ball.x = left; }, () => { ball.vx = Math.abs(ball.vx) * restitution; });
     } else if (ball.x > right) {
-      ball.x = right;
-      ball.vx = -Math.abs(ball.vx) * restitution;
-      bounced = true;
+      applyWall('right', () => { ball.x = right; }, () => { ball.vx = -Math.abs(ball.vx) * restitution; });
     }
 
     if (ball.y < top) {
-      ball.y = top;
-      ball.vy = Math.abs(ball.vy) * restitution;
-      bounced = true;
+      applyWall('top', () => { ball.y = top; }, () => { ball.vy = Math.abs(ball.vy) * restitution; });
     } else if (ball.y > bottom) {
-      ball.y = bottom;
-      ball.vy = -Math.abs(ball.vy) * restitution;
-      bounced = true;
+      applyWall('bottom', () => { ball.y = bottom; }, () => { ball.vy = -Math.abs(ball.vy) * restitution; });
     }
 
-    return bounced;
+    return result;
+  }
+
+  function resolveWallBounce(ball, bounds, restitution = 1) {
+    return resolveArenaWalls(ball, bounds, undefined, restitution).bounced;
   }
 
   function segmentCircleHit(start, end, circle, movingRadius = 0) {
@@ -298,6 +320,7 @@
   const api = {
     createBall,
     stepBall,
+    resolveArenaWalls,
     resolveWallBounce,
     segmentCircleHit,
     targetHitThisFrame,

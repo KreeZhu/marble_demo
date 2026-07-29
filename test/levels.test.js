@@ -5,7 +5,7 @@ const { levels } = require('../src/levels');
 const {
   createBall,
   stepBall,
-  resolveWallBounce,
+  resolveArenaWalls,
   targetHitThisFrame,
   tryTeleport,
   tryRelayLaunch,
@@ -75,6 +75,8 @@ function traceDefaultLauncher(level) {
     relayLaunches: new Set(),
     switchHits: new Set(),
     hitMovingObstacle: false,
+    stuckOnArenaWall: false,
+    arenaWallSides: new Set(),
     frames: 0,
   };
 
@@ -84,8 +86,14 @@ function traceDefaultLauncher(level) {
     const previous = { x: ball.x, y: ball.y };
     stepBall(ball, dt);
 
-    if (resolveWallBounce(ball, arena, 0.96)) {
+    const wallResult = resolveArenaWalls(ball, arena, level.arenaWalls, 0.96);
+    wallResult.sides.forEach((side) => trace.arenaWallSides.add(side));
+    if (wallResult.bounced) {
       trace.wallBounces += 1;
+    }
+    if (wallResult.stuck) {
+      trace.stuckOnArenaWall = true;
+      return trace;
     }
 
     obstacles.concat(activeDoorObstacles(doors)).forEach((obstacle, index) => {
@@ -207,6 +215,33 @@ test('difficulty adds mechanics over time', () => {
   assert.ok(levels[13].portals.length >= 2);
   assert.ok(levels[14].relayLaunchers.length >= 1);
   assert.ok(levels[15].obstacles.some((obstacle) => obstacle.material === 'sticky'));
+});
+
+test('arena boundary rules discourage unintended outer-wall play', () => {
+  const validModes = new Set(['bounce', 'sticky']);
+  levels.forEach((level) => {
+    assert.ok(level.arenaWalls, `${level.name} should define arena wall behavior`);
+    ['top', 'right', 'bottom', 'left'].forEach((side) => {
+      assert.ok(validModes.has(level.arenaWalls[side]), `${level.name}/${side} should use a valid arena wall mode`);
+    });
+
+    const stickySides = Object.values(level.arenaWalls).filter((mode) => mode === 'sticky').length;
+    if (!level.requiredMechanics.includes('wallBounce')) {
+      assert.equal(stickySides, 4, `${level.name} should make every outer wall sticky when wall bounce is not required`);
+    } else if (level.order !== 5) {
+      assert.ok(stickySides >= 2, `${level.name} should only leave necessary outer walls bouncy`);
+    }
+  });
+});
+
+test('authored routes avoid outer-wall bounces unless the level teaches them', () => {
+  levels.forEach((level) => {
+    const trace = traceDefaultLauncher(level);
+    if (!level.requiredMechanics.includes('wallBounce')) {
+      assert.equal(trace.wallBounces, 0, `${level.name} should not depend on arena wall bounces`);
+      assert.equal(trace.stuckOnArenaWall, false, `${level.name} should avoid sticky arena walls`);
+    }
+  });
 });
 
 test('each level can be solved by its authored default launcher route', () => {

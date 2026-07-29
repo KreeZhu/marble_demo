@@ -1,6 +1,12 @@
 (function exposeLevels(root) {
   'use strict';
 
+  const stickyWalls = { top: 'sticky', right: 'sticky', bottom: 'sticky', left: 'sticky' };
+  const allBounceWalls = { top: 'bounce', right: 'bounce', bottom: 'bounce', left: 'bounce' };
+  const topBounceWalls = { ...stickyWalls, top: 'bounce' };
+  const bottomBounceWalls = { ...stickyWalls, bottom: 'bounce' };
+  const leftBounceWalls = { ...stickyWalls, left: 'bounce' };
+
   const levels = [
     {
       order: 1,
@@ -8,6 +14,7 @@
       focus: '基础瞄准',
       hint: '第一关只考验方向：力度固定为 700，让球从 A 点直线碰到 B 点。',
       requiredMechanics: [],
+      arenaWalls: stickyWalls,
       target: { x: 812, y: 300, radius: 18 },
       launchers: [
         { id: 'A1', x: 124, y: 300, angle: 0, power: 700 },
@@ -22,6 +29,7 @@
       focus: '单墙反弹',
       hint: '直接路线被挡住了，利用上墙做一次折返。',
       requiredMechanics: ['wallBounce'],
+      arenaWalls: topBounceWalls,
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 500, angle: -42, power: 700 },
@@ -38,6 +46,7 @@
       focus: '反射角判断',
       hint: '换成从下墙折返，观察预线里的入射角和反射角关系。',
       requiredMechanics: ['wallBounce'],
+      arenaWalls: bottomBounceWalls,
       target: { x: 820, y: 420, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 120, angle: 39, power: 700 },
@@ -54,6 +63,7 @@
       focus: '固定力度角度',
       hint: '力度固定为 700，只需要调整角度，让球稳定穿过错位窄门。',
       requiredMechanics: [],
+      arenaWalls: stickyWalls,
       target: { x: 836, y: 330, radius: 17 },
       launchers: [
         { id: 'A1', x: 116, y: 272, angle: 5, power: 700 },
@@ -73,6 +83,7 @@
       focus: '连续反弹',
       hint: '起点仍然只有一个。用更陡的角度让球先碰上墙，再落进高位目标区。',
       requiredMechanics: ['wallBounce'],
+      arenaWalls: allBounceWalls,
       target: { x: 812, y: 142, radius: 18 },
       launchers: [
         { id: 'A1', x: 142, y: 500, angle: -29, power: 700 },
@@ -90,9 +101,10 @@
       focus: '传送门基础',
       hint: '把球送进蓝色传送门，它会从橙色传送门旁继续前进。',
       requiredMechanics: ['portal'],
-      target: { x: 838, y: 412, radius: 18 },
+      arenaWalls: stickyWalls,
+      target: { x: 838, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 118, y: 300, angle: -60, power: 700 },
+        { id: 'A1', x: 118, y: 300, angle: 0, power: 700 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -110,6 +122,7 @@
       focus: '传送与反弹组合',
       hint: '先用墙面修正角度，再进入传送门完成后半段。',
       requiredMechanics: ['wallBounce', 'portal'],
+      arenaWalls: leftBounceWalls,
       target: { x: 832, y: 456, radius: 18 },
       launchers: [
         { id: 'A1', x: 126, y: 116, angle: 14, power: 700 },
@@ -130,6 +143,7 @@
       focus: '二段发射',
       hint: '把球打进 R1。R1 会按自己的方向，以固定 700 力度再发射一次。',
       requiredMechanics: ['relay'],
+      arenaWalls: stickyWalls,
       target: { x: 836, y: 250, radius: 18 },
       launchers: [
         { id: 'A1', x: 118, y: 450, angle: -24, power: 700 },
@@ -148,6 +162,7 @@
       focus: '二段路线规划',
       hint: '先进入 R1，再让 R1 把球送进传送门。',
       requiredMechanics: ['relay', 'portal'],
+      arenaWalls: stickyWalls,
       target: { x: 846, y: 104, radius: 18 },
       launchers: [
         { id: 'A1', x: 118, y: 500, angle: -25, power: 700 },
@@ -170,6 +185,7 @@
       focus: '中继综合判断',
       hint: '先打进 R1，再通过传送门和移动障碍区完成最后一段。',
       requiredMechanics: ['relay', 'portal'],
+      arenaWalls: stickyWalls,
       target: { x: 846, y: 420, radius: 17 },
       launchers: [
         { id: 'A1', x: 118, y: 510, angle: -23, power: 700 },
@@ -194,6 +210,7 @@
       focus: '开关门机制',
       hint: '先让球碰到红色按钮，红门打开后再命中 B 点。',
       requiredMechanics: ['switchDoor'],
+      arenaWalls: stickyWalls,
       target: { x: 826, y: 300, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
@@ -217,6 +234,7 @@
       focus: '反弹开关',
       hint: '先利用上墙反弹触发红色按钮，红门打开后再进入目标通道。',
       requiredMechanics: ['switchDoor', 'wallBounce'],
+      arenaWalls: topBounceWalls,
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 500, angle: -41, power: 700 },
@@ -239,6 +257,7 @@
       focus: '移动砖块时机',
       hint: '红门仍然要先开，移动砖块会周期性扫过通道，观察窗口后发射。',
       requiredMechanics: ['switchDoor'],
+      arenaWalls: stickyWalls,
       target: { x: 826, y: 300, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
@@ -261,6 +280,7 @@
       focus: '开关与传送',
       hint: '先开红门，再进入传送门，出口会把球送进下方目标线。',
       requiredMechanics: ['switchDoor', 'portal'],
+      arenaWalls: stickyWalls,
       target: { x: 826, y: 420, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
@@ -286,6 +306,7 @@
       focus: '开关与子发射器',
       hint: '第一段先开红门并进入 R1，R1 位置固定，力度为 700，只能调整方向完成最后一段。',
       requiredMechanics: ['switchDoor', 'relay'],
+      arenaWalls: stickyWalls,
       target: { x: 836, y: 300, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 450, angle: -24, power: 700 },
@@ -310,6 +331,7 @@
       focus: '卸力墙禁区',
       hint: '咖啡色卸力墙会吃掉球的速度，碰到就会停住。绕开它，用墙面反弹命中 B 点。',
       requiredMechanics: ['wallBounce'],
+      arenaWalls: topBounceWalls,
       target: { x: 820, y: 300, radius: 18 },
       launchers: [
         { id: 'A1', x: 120, y: 300, angle: -37, power: 700 },

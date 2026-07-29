@@ -4,6 +4,7 @@ const assert = require('node:assert/strict');
 const {
   createBall,
   stepBall,
+  resolveArenaWalls,
   resolveWallBounce,
   segmentCircleHit,
   tryTeleport,
@@ -20,6 +21,23 @@ test('wall bounce clamps the ball inside the room and reflects velocity', () => 
 
   assert.equal(ball.x, 788);
   assert.equal(ball.vx, -360);
+});
+
+test('sticky arena wall absorbs the ball instead of reflecting it', () => {
+  const ball = createBall({ x: 795, y: 220, vx: 360, vy: 40, radius: 12 });
+
+  const result = resolveArenaWalls(
+    ball,
+    { x: 0, y: 0, width: 800, height: 500 },
+    { right: 'sticky' },
+  );
+
+  assert.equal(result.stuck, true);
+  assert.equal(result.bounced, false);
+  assert.deepEqual(result.sides, ['right']);
+  assert.equal(ball.x, 788);
+  assert.equal(ball.vx, 0);
+  assert.equal(ball.vy, 0);
 });
 
 test('target hit is detected across the whole frame path', () => {
