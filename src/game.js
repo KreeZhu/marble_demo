@@ -137,7 +137,9 @@
       selected: null,
       tool: 'start',
       dragging: false,
+      dragMode: null,
       dragOffset: { x: 0, y: 0 },
+      transformStart: null,
     },
   };
 
@@ -1180,6 +1182,148 @@
     return { x: obstacle.x, y: obstacle.y, width: obstacle.width, height: obstacle.height };
   }
 
+  function obstacleCenter(obstacle) {
+    if (obstacle.shape === 'circle' || obstacle.shape === 'triangle') {
+      return { x: obstacle.x, y: obstacle.y };
+    }
+    return {
+      x: obstacle.x + (obstacle.width || 90) / 2,
+      y: obstacle.y + (obstacle.height || 34) / 2,
+    };
+  }
+
+  function obstacleSize(obstacle) {
+    if (obstacle.shape === 'circle') {
+      const diameter = (obstacle.radius || 28) * 2;
+      return { width: diameter, height: diameter };
+    }
+    return {
+      width: obstacle.width || (obstacle.shape === 'triangle' ? 96 : 90),
+      height: obstacle.height || (obstacle.shape === 'triangle' ? 84 : 34),
+    };
+  }
+
+  function obstacleLocalToWorld(obstacle, localX, localY) {
+    const center = obstacleCenter(obstacle);
+    const angle = (obstacle.angle || 0) * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    return {
+      x: center.x + localX * cos - localY * sin,
+      y: center.y + localX * sin + localY * cos,
+    };
+  }
+
+  function pointToObstacleLocal(point, obstacle, centerOverride = obstacleCenter(obstacle), angleOverride = obstacle.angle || 0) {
+    const angle = angleOverride * Math.PI / 180;
+    const cos = Math.cos(angle);
+    const sin = Math.sin(angle);
+    const dx = point.x - centerOverride.x;
+    const dy = point.y - centerOverride.y;
+    return {
+      x: dx * cos + dy * sin,
+      y: -dx * sin + dy * cos,
+    };
+  }
+
+  function setObstacleCenter(obstacle, center) {
+    if (obstacle.shape === 'circle' || obstacle.shape === 'triangle') {
+      obstacle.x = center.x;
+      obstacle.y = center.y;
+      return;
+    }
+    obstacle.x = center.x - (obstacle.width || 90) / 2;
+    obstacle.y = center.y - (obstacle.height || 34) / 2;
+  }
+
+  function normalizeAngle(angle) {
+    let normalized = angle;
+    while (normalized > 180) normalized -= 360;
+    while (normalized < -180) normalized += 360;
+    return normalized;
+  }
+
+  function obstacleTransformHandles(obstacle) {
+    const size = obstacleSize(obstacle);
+    const halfWidth = size.width / 2;
+    const halfHeight = size.height / 2;
+    const rotateDistance = halfHeight + 36;
+    const handles = [
+      { mode: 'rotate', handle: 'rotate', point: obstacleLocalToWorld(obstacle, 0, -rotateDistance) },
+    ];
+
+    if (obstacle.shape === 'circle') {
+      const radius = obstacle.radius || 28;
+      [
+        { handle: 'e', x: radius, y: 0 },
+        { handle: 's', x: 0, y: radius },
+        { handle: 'w', x: -radius, y: 0 },
+        { handle: 'n', x: 0, y: -radius },
+      ].forEach((item) => {
+        handles.push({ mode: 'resize', handle: item.handle, point: obstacleLocalToWorld(obstacle, item.x, item.y) });
+      });
+      return handles;
+    }
+
+    [
+      { handle: 'nw', x: -halfWidth, y: -halfHeight },
+      { handle: 'ne', x: halfWidth, y: -halfHeight },
+      { handle: 'se', x: halfWidth, y: halfHeight },
+      { handle: 'sw', x: -halfWidth, y: halfHeight },
+    ].forEach((item) => {
+      handles.push({ mode: 'resize', handle: item.handle, point: obstacleLocalToWorld(obstacle, item.x, item.y) });
+    });
+    return handles;
+  }
+
+  function drawObstacleTransformHandles(obstacle) {
+    const center = obstacleCenter(obstacle);
+    const rotateHandle = obstacleTransformHandles(obstacle).find((handle) => handle.mode === 'rotate');
+    const handles = obstacleTransformHandles(obstacle).filter((handle) => handle.mode === 'resize');
+
+    ctx.save();
+    ctx.strokeStyle = 'rgba(244,247,251,0.78)';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 6]);
+    traceObstacleShape(obstacle);
+    ctx.stroke();
+    ctx.setLineDash([]);
+
+    ctx.strokeStyle = 'rgba(103,240,255,0.76)';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.moveTo(center.x, center.y);
+    ctx.lineTo(rotateHandle.point.x, rotateHandle.point.y);
+    ctx.stroke();
+
+    ctx.fillStyle = '#67f0ff';
+    ctx.strokeStyle = '#07120d';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(rotateHandle.point.x, rotateHandle.point.y, 9, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#07120d';
+    ctx.font = '900 11px Microsoft YaHei, Segoe UI, sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('↻', rotateHandle.point.x, rotateHandle.point.y + 0.5);
+
+    handles.forEach((handle) => {
+      ctx.save();
+      ctx.translate(handle.point.x, handle.point.y);
+      ctx.rotate((obstacle.angle || 0) * Math.PI / 180);
+      ctx.fillStyle = '#f4f7fb';
+      ctx.strokeStyle = '#67f0ff';
+      ctx.lineWidth = 2;
+      roundRectPath(-6, -6, 12, 12, 3);
+      ctx.fill();
+      ctx.stroke();
+      ctx.restore();
+    });
+    ctx.restore();
+  }
+
   function drawObstacleShape(obstacle, fillStyle) {
     const bounds = obstacleBounds(obstacle);
     const isBoost = obstacle.material === 'boost';
@@ -1269,10 +1413,11 @@
       ctx.shadowBlur = obstacle.material === 'boost' ? 12 : obstacle.material === 'sticky' ? 9 : (moving ? 8 : 2);
       drawObstacleShape(obstacle, obstacleColor(obstacle));
       if (active) {
-        ctx.strokeStyle = '#f4f7fb';
-        ctx.lineWidth = 3;
+        ctx.strokeStyle = 'rgba(244,247,251,0.38)';
+        ctx.lineWidth = 1;
         ctx.setLineDash([5, 5]);
         ctx.strokeRect(bounds.x - 5, bounds.y - 5, bounds.width + 10, bounds.height + 10);
+        drawObstacleTransformHandles(obstacle);
       }
       ctx.restore();
     });
@@ -1853,6 +1998,89 @@
     return Math.abs(localX) <= width / 2 + 8 && Math.abs(localY) <= height / 2 + 8;
   }
 
+  function hitEditorTransformHandle(point) {
+    if (!state.editor.selected || state.editor.selected.type !== 'obstacle') return null;
+    const obstacle = getEditorObject();
+    if (!obstacle) return null;
+    const handles = obstacleTransformHandles(obstacle);
+
+    for (const handle of handles) {
+      const radius = handle.mode === 'rotate' ? 13 : 10;
+      if (Math.hypot(point.x - handle.point.x, point.y - handle.point.y) <= radius) {
+        return handle;
+      }
+    }
+    return null;
+  }
+
+  function cloneObstacleForTransform(obstacle) {
+    return {
+      ...obstacle,
+      path: obstacle.path ? { ...obstacle.path } : undefined,
+      center: obstacleCenter(obstacle),
+    };
+  }
+
+  function beginEditorTransform(point, handle) {
+    const object = getEditorObject();
+    state.editor.dragging = true;
+    state.editor.dragMode = handle.mode;
+    state.editor.transformStart = {
+      handle: handle.handle,
+      object: cloneObstacleForTransform(object),
+      pointer: point,
+    };
+  }
+
+  function resizeObstacleFromPointer(object, point, start) {
+    const source = start.object;
+    const center = source.center;
+
+    if (source.shape === 'circle') {
+      const radius = clamp(Math.hypot(point.x - center.x, point.y - center.y), 12, 160);
+      object.radius = radius;
+      object.width = radius * 2;
+      object.height = radius * 2;
+      object.x = center.x;
+      object.y = center.y;
+      return;
+    }
+
+    const local = pointToObstacleLocal(point, source, center, source.angle || 0);
+    const width = clamp(Math.abs(local.x) * 2, 20, 500);
+    const height = clamp(Math.abs(local.y) * 2, 20, 500);
+    object.width = width;
+    object.height = height;
+    object.angle = source.angle || 0;
+    if (source.shape === 'triangle') {
+      object.x = center.x;
+      object.y = center.y;
+    } else {
+      object.x = center.x - width / 2;
+      object.y = center.y - height / 2;
+    }
+  }
+
+  function rotateObstacleFromPointer(object, point, start) {
+    const center = start.object.center;
+    object.angle = normalizeAngle(Math.atan2(point.y - center.y, point.x - center.x) * 180 / Math.PI + 90);
+    setObstacleCenter(object, center);
+  }
+
+  function transformEditorSelection(point) {
+    const object = getEditorObject();
+    const start = state.editor.transformStart;
+    if (!object || !start) return;
+
+    if (state.editor.dragMode === 'rotate') {
+      rotateObstacleFromPointer(object, point, start);
+    } else if (state.editor.dragMode === 'resize') {
+      resizeObstacleFromPointer(object, point, start);
+    }
+    clampEditorObject(object);
+    syncEditorUi();
+  }
+
   function moveEditorSelection(point) {
     const object = getEditorObject();
     if (!object) return;
@@ -2076,11 +2304,20 @@
   canvas.addEventListener('pointerdown', (event) => {
     if (state.mode === 'editor') {
       const point = screenToWorld(event);
+      const transformHandle = hitEditorTransformHandle(point);
+      if (transformHandle) {
+        beginEditorTransform(point, transformHandle);
+        canvas.setPointerCapture(event.pointerId);
+        setEditorStatus(transformHandle.mode === 'rotate' ? '拖动蓝色旋转手柄调整墙体角度。' : '拖动白色尺寸手柄调整墙体大小。', 'var(--amber)');
+        syncEditorUi();
+        return;
+      }
       const selection = hitEditorObject(point);
       if (selection) {
         state.editor.selected = selection;
         const object = getEditorObject(selection);
         state.editor.dragging = true;
+        state.editor.dragMode = 'move';
         state.editor.dragOffset = { x: point.x - object.x, y: point.y - object.y };
         canvas.setPointerCapture(event.pointerId);
         syncEditorUi();
@@ -2107,7 +2344,12 @@
   canvas.addEventListener('pointermove', (event) => {
     if (state.mode === 'editor') {
       if (!state.editor.dragging) return;
-      moveEditorSelection(screenToWorld(event));
+      const point = screenToWorld(event);
+      if (state.editor.dragMode === 'rotate' || state.editor.dragMode === 'resize') {
+        transformEditorSelection(point);
+      } else {
+        moveEditorSelection(point);
+      }
       return;
     }
     if (!state.draggingAim) return;
@@ -2120,6 +2362,8 @@
     state.draggingAim = false;
     state.dragMode = null;
     state.editor.dragging = false;
+    state.editor.dragMode = null;
+    state.editor.transformStart = null;
   });
 
   function isFormEditingTarget(target) {
