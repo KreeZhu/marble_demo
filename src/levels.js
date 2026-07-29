@@ -377,8 +377,8 @@
         { id: 'R1', x: 420, y: 300, radius: 24, angle: 0, power: 700, movable: false, purpose: '红门打开后承接第二发，把球送进传送门。' },
       ],
       obstacles: [
-        { id: 'upper-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，封住高位偷线。', x: 250, y: 190, width: 300, height: 32 },
-        { id: 'lower-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，封住低位偷线。', x: 250, y: 378, width: 300, height: 32 },
+        { id: 'upper-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '黄色卸力墙，封住高位偷线。', x: 250, y: 190, width: 300, height: 32 },
+        { id: 'lower-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '黄色卸力墙，封住低位偷线。', x: 250, y: 378, width: 300, height: 32 },
         { id: 'moving-sentry', role: 'movingGate', purpose: '第二段路线附近的移动限制，逼迫玩家观察开门后的发射时机。', x: 548, y: 112, width: 26, height: 82, path: { x: 0, y: 54 }, speed: 1.1, phase: -1.25 },
       ],
       switches: [

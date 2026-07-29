@@ -92,10 +92,10 @@
   const art = {
     metal: '#596977',
     metalDark: '#303943',
-    boost: '#d96cff',
-    boostCore: '#67f0ff',
-    sticky: '#8a5a34',
-    stickyDark: '#3f2515',
+    boost: '#4ee06f',
+    boostCore: '#d7ff7a',
+    sticky: '#f2c84b',
+    stickyDark: '#6f5712',
     moving: '#ffbf47',
     start: '#41d692',
     target: '#41d692',
@@ -778,7 +778,7 @@
 
     if (wallResult.stuck) {
       state.ball.active = false;
-      setStatus('碰到咖啡色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
+      setStatus('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
       playSound('impact');
       syncUi();
       return;
@@ -798,7 +798,7 @@
 
     if (stickyHit) {
       state.ball.active = false;
-      setStatus('碰到咖啡色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
+      setStatus('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
       playSound('impact');
       syncUi();
       return;
@@ -1357,7 +1357,7 @@
       ctx.font = `800 ${Math.max(13, Math.min(22, bounds.height * 0.42))}px Microsoft YaHei, Segoe UI, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText('停', bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 1);
+      ctx.fillText('吸', bounds.x + bounds.width / 2, bounds.y + bounds.height / 2 + 1);
     }
     if (obstacle.path) {
       ctx.globalAlpha = 0.9;
@@ -1700,7 +1700,7 @@
     } else {
       ctx.fillText('A 点发射器', arena.x + 16, arena.y + 24);
       const stickySides = Object.values(arenaWallModes()).filter((mode) => mode === 'sticky').length;
-      const wallTip = stickySides > 0 ? '咖啡色外框会卸力，尽量不要碰边界' : '普通外框可以反弹';
+      const wallTip = stickySides > 0 ? '黄色外框会卸力，尽量不要碰边界' : '普通外框可以反弹';
       ctx.fillText(state.relayLaunchers.length > 0 ? `R 是中继发射器：球碰进去后自动二次发射｜${wallTip}` : wallTip, arena.x + 424, arena.y + arena.height - 18);
     }
     ctx.restore();
@@ -1909,12 +1909,6 @@
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'circleWall') {
       draft.obstacles.push({ id: `circle-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'circle', material: 'normal', purpose: '自定义圆形墙。', x: 470, y: 300, radius: 34, width: 68, height: 68, angle: 0 });
-      state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
-    } else if (tool === 'boostWall') {
-      draft.obstacles.push({ id: `boost-${draft.obstacles.length + 1}`, role: 'blocker', shape: 'rect', material: 'boost', purpose: '自定义高弹墙。', x: 410, y: 260, width: 120, height: 36, angle: 0 });
-      state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
-    } else if (tool === 'stickyWall') {
-      draft.obstacles.push({ id: `sticky-${draft.obstacles.length + 1}`, role: 'deadzone', shape: 'rect', material: 'sticky', purpose: '自定义卸力墙，碰到后球会停住。', x: 410, y: 260, width: 140, height: 42, angle: 0 });
       state.editor.selected = { type: 'obstacle', index: draft.obstacles.length - 1 };
     } else if (tool === 'redSwitch') {
       draft.switches.push({ id: `red-switch-${draft.switches.length + 1}`, color: 'red', x: 350, y: 300, radius: 18, activated: false, purpose: '红色按钮，被球击中后打开红色门。' });

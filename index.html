@@ -138,8 +138,6 @@
               <button data-editor-tool="wall" type="button">矩形墙</button>
               <button data-editor-tool="triangleWall" type="button">三角墙</button>
               <button data-editor-tool="circleWall" type="button">圆形墙</button>
-              <button data-editor-tool="boostWall" type="button">高弹墙</button>
-              <button data-editor-tool="stickyWall" type="button">卸力墙</button>
               <button data-editor-tool="redSwitch" type="button">红按钮</button>
               <button data-editor-tool="redDoor" type="button">红门</button>
               <button data-editor-tool="moving" type="button">移动机关</button>
@@ -159,7 +157,7 @@
               <label class="rect-prop">宽<input id="editorWidth" type="number" min="20" max="500" step="1"></label>
               <label class="rect-prop">高<input id="editorHeight" type="number" min="20" max="500" step="1"></label>
               <label class="circle-prop">半径<input id="editorRadius" type="number" min="12" max="160" step="1"></label>
-              <label class="material-prop">材质<select id="editorMaterial"><option value="normal">普通</option><option value="boost">高弹</option><option value="sticky">卸力</option></select></label>
+              <label class="material-prop">材质<select id="editorMaterial"><option value="normal">普通墙</option><option value="boost">弹力墙</option><option value="sticky">卸力墙</option></select></label>
               <label class="angle-prop">角度<input id="editorAngle" type="number" min="-180" max="180" step="1"></label>
               <label class="power-prop hidden">力度<input id="editorPower" type="number" min="700" max="700" step="10" value="700"></label>
               <label class="moving-prop">移动 X<input id="editorPathX" type="number" min="-300" max="300" step="10"></label>
