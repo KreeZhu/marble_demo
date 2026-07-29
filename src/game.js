@@ -1289,65 +1289,115 @@
   function drawSwitches(switches = state.switches, selected = null) {
     switches.forEach((switchItem, index) => {
       const active = selected && selected.type === 'switch' && selected.index === index;
+      const radius = switchItem.radius || 18;
+      const isOn = Boolean(switchItem.activated);
+      const pulse = 0.5 + Math.sin(performance.now() / 360 + index * 0.8) * 0.5;
+      const glowAlpha = isOn ? 0.5 + pulse * 0.32 : 0.24 + pulse * 0.22;
       ctx.save();
       ctx.translate(switchItem.x, switchItem.y);
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = switchItem.activated || active ? 16 : 6;
-      ctx.fillStyle = 'rgba(30, 8, 8, 0.82)';
+      ctx.shadowBlur = active ? 24 : isOn ? 18 + pulse * 8 : 10 + pulse * 7;
+      ctx.fillStyle = `rgba(255, 48, 54, ${glowAlpha * 0.22})`;
       ctx.beginPath();
-      ctx.arc(0, 0, (switchItem.radius || 18) + 8, 0, Math.PI * 2);
+      ctx.arc(0, 0, radius + 18 + pulse * 5, 0, Math.PI * 2);
       ctx.fill();
-      const button = ctx.createRadialGradient(-5, -6, 2, 0, 0, switchItem.radius || 18);
-      button.addColorStop(0, switchItem.activated ? '#ffd1cd' : '#ff9a91');
-      button.addColorStop(0.32, switchItem.activated ? '#ff8b84' : art.red);
-      button.addColorStop(1, '#8f1714');
+      ctx.fillStyle = 'rgba(38, 6, 8, 0.92)';
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 10, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.strokeStyle = `rgba(255, 214, 170, ${0.46 + pulse * 0.34})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 6, -Math.PI / 2, Math.PI * (1.45 + pulse * 0.25));
+      ctx.stroke();
+      const button = ctx.createRadialGradient(-6, -8, 2, 0, 0, radius);
+      button.addColorStop(0, isOn ? '#fff4da' : '#ffd0ca');
+      button.addColorStop(0.28, isOn ? '#ffbc4e' : '#ff5b5f');
+      button.addColorStop(0.7, isOn ? '#ff3d35' : '#c6202b');
+      button.addColorStop(1, isOn ? '#9a1419' : '#5b0d13');
       ctx.fillStyle = button;
       ctx.beginPath();
-      ctx.arc(0, 0, switchItem.radius || 18, 0, Math.PI * 2);
+      ctx.arc(0, 0, radius, 0, Math.PI * 2);
       ctx.fill();
-      ctx.strokeStyle = active ? '#f4f7fb' : 'rgba(255,255,255,0.38)';
-      ctx.lineWidth = active ? 4 : 2;
+      ctx.strokeStyle = active ? '#f4f7fb' : isOn ? '#ffe59e' : 'rgba(255,255,255,0.55)';
+      ctx.lineWidth = active ? 4 : 2.5;
       ctx.stroke();
-      ctx.fillStyle = '#fff7f5';
-      ctx.font = '800 11px Microsoft YaHei, Segoe UI, sans-serif';
+      ctx.fillStyle = isOn ? '#fff8dd' : '#fff7f5';
+      ctx.font = `900 ${isOn ? 10 : 9}px Microsoft YaHei, Segoe UI, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(switchItem.activated ? 'ON' : '!', 0, 1);
+      ctx.fillText(isOn ? 'ON' : 'OFF', 0, 1);
+      ctx.fillStyle = `rgba(255, 235, 190, ${0.38 + pulse * 0.32})`;
+      ctx.beginPath();
+      ctx.arc(-radius * 0.32, -radius * 0.38, Math.max(3, radius * 0.18), 0, Math.PI * 2);
+      ctx.fill();
       ctx.restore();
+    });
+  }
+
+  function drawSwitchDoorLinks(switches = state.switches, doors = state.doors) {
+    switches.forEach((switchItem, switchIndex) => {
+      const linkedDoors = doors.filter((door) => door.color === switchItem.color);
+      linkedDoors.forEach((door, doorIndex) => {
+        const pulse = 0.5 + Math.sin(performance.now() / 420 + switchIndex + doorIndex * 0.7) * 0.5;
+        const doorCenter = { x: door.x + door.width / 2, y: door.y + door.height / 2 };
+        const alpha = switchItem.activated ? 0.42 + pulse * 0.28 : 0.16 + pulse * 0.18;
+        ctx.save();
+        ctx.strokeStyle = `rgba(255, 66, 74, ${alpha})`;
+        ctx.lineWidth = switchItem.activated ? 4 : 3;
+        ctx.setLineDash(switchItem.activated ? [12, 8] : [5, 12]);
+        ctx.lineDashOffset = -performance.now() / (switchItem.activated ? 42 : 72);
+        ctx.beginPath();
+        ctx.moveTo(switchItem.x, switchItem.y);
+        ctx.lineTo(doorCenter.x, doorCenter.y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = `rgba(255, 206, 128, ${alpha + 0.18})`;
+        ctx.beginPath();
+        ctx.arc(doorCenter.x, doorCenter.y, 4 + pulse * 3, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+      });
     });
   }
 
   function drawDoors(doors = state.doors, selected = null) {
     doors.forEach((door, index) => {
       const active = selected && selected.type === 'door' && selected.index === index;
+      const pulse = 0.5 + Math.sin(performance.now() / 380 + index * 0.9) * 0.5;
       ctx.save();
-      ctx.globalAlpha = door.open ? 0.22 : 1;
+      ctx.globalAlpha = door.open ? 0.34 : 1;
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = door.open ? 2 : 12;
+      ctx.shadowBlur = door.open ? 9 + pulse * 8 : 16 + pulse * 7;
       const body = ctx.createLinearGradient(door.x, door.y, door.x + door.width, door.y + door.height);
-      body.addColorStop(0, '#ff746a');
-      body.addColorStop(0.48, '#c83232');
-      body.addColorStop(1, '#6d1513');
+      body.addColorStop(0, door.open ? '#ffcf77' : '#ff8d7f');
+      body.addColorStop(0.42, door.open ? '#ff4f45' : '#e43238');
+      body.addColorStop(1, door.open ? '#741012' : '#5f0e12');
       ctx.fillStyle = body;
       roundRectPath(door.x, door.y, door.width, door.height, 5);
       ctx.fill();
-      ctx.strokeStyle = active ? '#f4f7fb' : '#ffaaa3';
-      ctx.lineWidth = active ? 4 : 2;
+      ctx.strokeStyle = active ? '#f4f7fb' : `rgba(255, 224, 154, ${door.open ? 0.8 : 0.48 + pulse * 0.32})`;
+      ctx.lineWidth = active ? 4 : 2.5;
       ctx.stroke();
       ctx.save();
       roundRectPath(door.x, door.y, door.width, door.height, 5);
       ctx.clip();
-      ctx.strokeStyle = 'rgba(255,255,255,0.23)';
+      ctx.strokeStyle = door.open ? `rgba(255, 237, 196, ${0.38 + pulse * 0.28})` : 'rgba(255,255,255,0.24)';
       ctx.lineWidth = 3;
-      for (let y = door.y + 10; y < door.y + door.height; y += 24) {
+      for (let y = door.y + 8; y < door.y + door.height; y += 22) {
         ctx.beginPath();
         ctx.moveTo(door.x + 5, y);
         ctx.lineTo(door.x + door.width - 5, y + 13);
         ctx.stroke();
       }
       ctx.restore();
-      ctx.fillStyle = door.open ? 'rgba(244,247,251,0.18)' : 'rgba(7,18,13,0.38)';
+      ctx.fillStyle = door.open ? 'rgba(255, 215, 135, 0.2)' : 'rgba(7,18,13,0.42)';
       ctx.fillRect(door.x + 6, door.y + 6, Math.max(4, door.width - 12), Math.max(4, door.height - 12));
+      ctx.fillStyle = door.open ? '#fff2c1' : '#fff7f5';
+      ctx.font = '900 10px Microsoft YaHei, Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(door.open ? 'ON' : 'OFF', door.x + door.width / 2, door.y + door.height / 2);
       ctx.restore();
     });
   }
@@ -1480,6 +1530,7 @@
     drawPreview();
     drawPortals();
     drawObstacles();
+    drawSwitchDoorLinks();
     drawDoors();
     drawSwitches();
     drawTarget();
@@ -1511,6 +1562,7 @@
     });
     drawPortals(draft.portals, state.editor.selected);
     drawObstacles(obstacles, state.editor.selected);
+    drawSwitchDoorLinks(draft.switches, draft.doors);
     drawDoors(draft.doors, state.editor.selected);
     drawSwitches(draft.switches, state.editor.selected);
     drawTarget(draft.target, selectedIs('target', 0));
