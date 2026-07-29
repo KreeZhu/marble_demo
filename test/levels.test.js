@@ -56,7 +56,11 @@ function updateSwitchHits(ball, switches, doors, trace) {
 
 function traceDefaultLauncher(level) {
   const obstacles = cloneObstacles(level);
-  const relays = (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower }));
+  const relays = (level.relayLaunchers || []).map((relay) => ({
+    ...relay,
+    angle: level.solutionRelayAngles?.[relay.id] ?? relay.angle,
+    power: fixedLauncherPower,
+  }));
   const switches = cloneSwitches(level);
   const doors = cloneDoors(level);
   const solutionShots = Array.isArray(level.solutionShots) && level.solutionShots.length > 0
@@ -183,6 +187,7 @@ test('every level has one adjustable start launcher', () => {
     assert.equal(level.launchers.length, 1, `${level.name} should only expose A1`);
     assert.equal(level.launchers[0].id, 'A1');
     assert.equal(level.launchers[0].power, fixedLauncherPower, `${level.name}/A1 should use fixed power`);
+    assert.equal(level.launchers[0].angle, 0, `${level.name}/A1 should start facing right`);
   });
 });
 
@@ -190,6 +195,7 @@ test('all authored relay launchers use the fixed power', () => {
   levels.forEach((level) => {
     (level.relayLaunchers || []).forEach((relay) => {
       assert.equal(relay.power, fixedLauncherPower, `${level.name}/${relay.id} should use fixed power`);
+      assert.equal(relay.angle, 0, `${level.name}/${relay.id} should start facing right`);
     });
   });
 });

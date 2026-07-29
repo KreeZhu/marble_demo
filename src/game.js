@@ -1751,7 +1751,7 @@
       state.editor.selected = { type: 'launcher', index: draft.launchers.length - 1 };
     } else if (tool === 'relay') {
       const id = `R${draft.relayLaunchers.length + 1}`;
-      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: -10, power: fixedLauncherPower, movable: true, purpose: '自定义中继发射器。' });
+      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: 0, power: fixedLauncherPower, movable: true, purpose: '自定义中继发射器。' });
       state.editor.selected = { type: 'relay', index: draft.relayLaunchers.length - 1 };
     } else if (tool === 'target') {
       draft.target = { x: 820, y: 300, radius: 18 };

@@ -32,7 +32,10 @@
       arenaWalls: topBounceWalls,
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 500, angle: -42, power: 700 },
+        { id: 'A1', x: 120, y: 500, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -42 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -49,7 +52,10 @@
       arenaWalls: bottomBounceWalls,
       target: { x: 820, y: 420, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 120, angle: 39, power: 700 },
+        { id: 'A1', x: 120, y: 120, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: 39 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -66,7 +72,10 @@
       arenaWalls: stickyWalls,
       target: { x: 836, y: 330, radius: 17 },
       launchers: [
-        { id: 'A1', x: 116, y: 272, angle: 5, power: 700 },
+        { id: 'A1', x: 116, y: 272, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: 5 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -86,7 +95,10 @@
       arenaWalls: allBounceWalls,
       target: { x: 812, y: 142, radius: 18 },
       launchers: [
-        { id: 'A1', x: 142, y: 500, angle: -29, power: 700 },
+        { id: 'A1', x: 142, y: 500, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -29 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -125,7 +137,10 @@
       arenaWalls: leftBounceWalls,
       target: { x: 832, y: 456, radius: 18 },
       launchers: [
-        { id: 'A1', x: 126, y: 116, angle: 14, power: 700 },
+        { id: 'A1', x: 126, y: 116, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: 14 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -146,10 +161,14 @@
       arenaWalls: stickyWalls,
       target: { x: 836, y: 250, radius: 18 },
       launchers: [
-        { id: 'A1', x: 118, y: 450, angle: -24, power: 700 },
+        { id: 'A1', x: 118, y: 450, angle: 0, power: 700 },
       ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -24 },
+      ],
+      solutionRelayAngles: { R1: -9 },
       relayLaunchers: [
-        { id: 'R1', x: 420, y: 316, radius: 24, angle: -9, power: 700, movable: false, purpose: '第一枚中继发射器，把球从左下路线转接到右侧目标。' },
+        { id: 'R1', x: 420, y: 316, radius: 24, angle: 0, power: 700, movable: false, purpose: '第一枚中继发射器，把球从左下路线转接到右侧目标。' },
       ],
       obstacles: [
         { id: 'relay-lane-wall', role: 'blocker', purpose: '挡住 A1 直达 B 的路线，让玩家必须先进入 R1。', x: 536, y: 336, width: 46, height: 148 },
@@ -165,10 +184,14 @@
       arenaWalls: stickyWalls,
       target: { x: 846, y: 104, radius: 18 },
       launchers: [
-        { id: 'A1', x: 118, y: 500, angle: -25, power: 700 },
+        { id: 'A1', x: 118, y: 500, angle: 0, power: 700 },
       ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -25 },
+      ],
+      solutionRelayAngles: { R1: -29 },
       relayLaunchers: [
-        { id: 'R1', x: 380, y: 378, radius: 24, angle: -29, power: 700, movable: false, purpose: '承接第一段斜线，再把球送入传送入口。' },
+        { id: 'R1', x: 380, y: 378, radius: 24, angle: 0, power: 700, movable: false, purpose: '承接第一段斜线，再把球送入传送入口。' },
       ],
       obstacles: [
         { id: 'top-route-lock', role: 'blocker', purpose: '封锁 A1 上方直达路线。', x: 320, y: 36, width: 42, height: 286 },
@@ -188,10 +211,14 @@
       arenaWalls: stickyWalls,
       target: { x: 846, y: 420, radius: 17 },
       launchers: [
-        { id: 'A1', x: 118, y: 510, angle: -23, power: 700 },
+        { id: 'A1', x: 118, y: 510, angle: 0, power: 700 },
       ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -23 },
+      ],
+      solutionRelayAngles: { R1: -17 },
       relayLaunchers: [
-        { id: 'R1', x: 402, y: 385, radius: 24, angle: -17, power: 700, movable: false, purpose: '把第一段路线转接到传送入口。' },
+        { id: 'R1', x: 402, y: 385, radius: 24, angle: 0, power: 700, movable: false, purpose: '把第一段路线转接到传送入口。' },
       ],
       obstacles: [
         { id: 'left-lock-wall', role: 'blocker', purpose: '阻断从左侧直接横穿的路线。', x: 294, y: 36, width: 44, height: 330 },
@@ -237,7 +264,10 @@
       arenaWalls: topBounceWalls,
       target: { x: 810, y: 180, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 500, angle: -41, power: 700 },
+        { id: 'A1', x: 120, y: 500, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -41 },
       ],
       relayLaunchers: [],
       obstacles: [
@@ -309,7 +339,10 @@
       arenaWalls: stickyWalls,
       target: { x: 836, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 450, angle: -24, power: 700 },
+        { id: 'A1', x: 120, y: 450, angle: 0, power: 700 },
+      ],
+      solutionShots: [
+        { launcherId: 'A1', angle: -24 },
       ],
       relayLaunchers: [
         { id: 'R1', x: 420, y: 316, radius: 24, angle: 0, power: 700, movable: false, purpose: '固定位置和固定力度的子发射器，承接开关门后的路线。' },
@@ -334,7 +367,7 @@
       arenaWalls: leftBounceWalls,
       target: { x: 820, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 300, angle: 180, power: 700 },
+        { id: 'A1', x: 120, y: 300, angle: 0, power: 700 },
       ],
       solutionShots: [
         { launcherId: 'A1', angle: 180 },
