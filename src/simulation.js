@@ -13,6 +13,8 @@
       active: false,
       portalCooldown: 0,
       relayCooldown: 0,
+      launcherCooldown: 0,
+      originLauncherId: null,
       trail: [],
     };
   }
@@ -30,6 +32,7 @@
     ball.y += ball.vy * dt;
     ball.portalCooldown = Math.max(0, ball.portalCooldown - dt);
     ball.relayCooldown = Math.max(0, ball.relayCooldown - dt);
+    ball.launcherCooldown = Math.max(0, ball.launcherCooldown - dt);
   }
 
   function resolveArenaWalls(ball, bounds, wallModes = {}, restitution = 1) {
@@ -139,6 +142,24 @@
     ball.vy = Math.sin(radians) * relay.power;
     ball.relayCooldown = 0.45;
     return relay;
+  }
+
+  function tryLauncherCapture(ball, launchers = []) {
+    if (ball.launcherCooldown > 0) return null;
+
+    const originLauncher = launchers.find((launcher) => (
+      launcher.id === ball.originLauncherId &&
+      distance(ball, launcher) <= (launcher.radius || 22) + ball.radius
+    ));
+    if (!originLauncher) return null;
+
+    ball.x = originLauncher.x;
+    ball.y = originLauncher.y;
+    ball.vx = 0;
+    ball.vy = 0;
+    ball.active = false;
+    ball.launcherCooldown = 0.18;
+    return originLauncher;
   }
 
   function resolveObstacleBounce(ball, rect, restitution = 1) {
@@ -326,6 +347,7 @@
     targetHitThisFrame,
     tryTeleport,
     tryRelayLaunch,
+    tryLauncherCapture,
     resolveObstacleBounce,
     resolveCircleObstacleBounce,
     resolveTriangleObstacleBounce,

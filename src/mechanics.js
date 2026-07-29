@@ -8,6 +8,7 @@
     obstacleBounce: '障碍反弹',
     relay: '中继发射器',
     switchDoor: '开关门',
+    launcherReturn: '回到 A 点再发射',
   };
 
   function shotMeetsRequiredMechanics({ requiredMechanics, events }) {
@@ -26,6 +27,8 @@
         missing.push(mechanicLabels.relay);
       } else if (mechanic === 'switchDoor' && events.switchHits.size <= 0) {
         missing.push(mechanicLabels.switchDoor);
+      } else if (mechanic === 'launcherReturn' && (events.launcherReturns || 0) <= 0) {
+        missing.push(mechanicLabels.launcherReturn);
       }
     });
 

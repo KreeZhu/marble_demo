@@ -9,6 +9,7 @@ const {
   targetHitThisFrame,
   tryTeleport,
   tryRelayLaunch,
+  tryLauncherCapture,
   resolveObstacleBounce,
   resolveShapedObstacleBounce,
   updateMovingObstacle,
@@ -54,19 +55,13 @@ function updateSwitchHits(ball, switches, doors, trace) {
 }
 
 function traceDefaultLauncher(level) {
-  const launcher = level.launchers[0];
-  const radians = launcher.angle * Math.PI / 180;
-  const ball = createBall({
-    x: launcher.x,
-    y: launcher.y,
-    vx: Math.cos(radians) * fixedLauncherPower,
-    vy: Math.sin(radians) * fixedLauncherPower,
-    radius: 9,
-  });
   const obstacles = cloneObstacles(level);
   const relays = (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower }));
   const switches = cloneSwitches(level);
   const doors = cloneDoors(level);
+  const solutionShots = Array.isArray(level.solutionShots) && level.solutionShots.length > 0
+    ? level.solutionShots
+    : [{ launcherId: level.launchers[0].id, angle: level.launchers[0].angle }];
   const trace = {
     solved: false,
     wallBounces: 0,
@@ -74,59 +69,92 @@ function traceDefaultLauncher(level) {
     teleports: new Set(),
     relayLaunches: new Set(),
     switchHits: new Set(),
+    launcherReturns: 0,
     hitMovingObstacle: false,
     stuckOnArenaWall: false,
     arenaWallSides: new Set(),
     frames: 0,
   };
 
-  for (let i = 0; i < 720; i += 1) {
-    const dt = 1 / 60;
-    obstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
-    const previous = { x: ball.x, y: ball.y };
-    stepBall(ball, dt);
-
-    const wallResult = resolveArenaWalls(ball, arena, level.arenaWalls, 0.96);
-    wallResult.sides.forEach((side) => trace.arenaWallSides.add(side));
-    if (wallResult.bounced) {
-      trace.wallBounces += 1;
-    }
-    if (wallResult.stuck) {
-      trace.stuckOnArenaWall = true;
-      return trace;
-    }
-
-    obstacles.concat(activeDoorObstacles(doors)).forEach((obstacle, index) => {
-      if (resolveShapedObstacleBounce(ball, obstacle, obstacle.material === 'boost' ? 1.22 : 0.94)) {
-        trace.obstacleBounces.add(obstacle.id);
-        if (index < level.obstacles.length && level.obstacles[index].path) trace.hitMovingObstacle = true;
-      }
+  for (const shot of solutionShots) {
+    const launcher = level.launchers.find((item) => item.id === shot.launcherId) || level.launchers[0];
+    const angle = Number.isFinite(shot.angle) ? shot.angle : launcher.angle;
+    const radians = angle * Math.PI / 180;
+    const ball = createBall({
+      x: launcher.x,
+      y: launcher.y,
+      vx: Math.cos(radians) * fixedLauncherPower,
+      vy: Math.sin(radians) * fixedLauncherPower,
+      radius: 9,
     });
+    ball.active = true;
+    ball.originLauncherId = launcher.id;
+    ball.launcherCooldown = 0.18;
+    let captured = false;
 
-    updateSwitchHits(ball, switches, doors, trace);
+    for (let i = 0; i < 720; i += 1) {
+      const dt = 1 / 60;
+      obstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
+      const previous = { x: ball.x, y: ball.y };
+      stepBall(ball, dt);
 
-    const beforePortal = { x: ball.x, y: ball.y };
-    const teleported = tryTeleport(ball, level.portals);
-    if (teleported) {
-      const entry = level.portals.find((portal) => (
-        Math.hypot(beforePortal.x - portal.x, beforePortal.y - portal.y) <= portal.radius + ball.radius
-      ));
-      if (entry) trace.teleports.add(entry.id);
+      const wallResult = resolveArenaWalls(ball, arena, level.arenaWalls, 0.96);
+      wallResult.sides.forEach((side) => trace.arenaWallSides.add(side));
+      if (wallResult.bounced) {
+        trace.wallBounces += 1;
+      }
+      if (wallResult.stuck) {
+        trace.stuckOnArenaWall = true;
+        return trace;
+      }
+
+      let stickyHit = false;
+      obstacles.concat(activeDoorObstacles(doors)).forEach((obstacle, index) => {
+        if (resolveShapedObstacleBounce(ball, obstacle, obstacle.material === 'boost' ? 1.22 : 0.94)) {
+          trace.obstacleBounces.add(obstacle.id);
+          if (index < level.obstacles.length && level.obstacles[index].path) trace.hitMovingObstacle = true;
+          if (obstacle.material === 'sticky') stickyHit = true;
+        }
+      });
+      if (stickyHit) return trace;
+
+      updateSwitchHits(ball, switches, doors, trace);
+
+      const beforePortal = { x: ball.x, y: ball.y };
+      const teleported = tryTeleport(ball, level.portals);
+      if (teleported) {
+        const entry = level.portals.find((portal) => (
+          Math.hypot(beforePortal.x - portal.x, beforePortal.y - portal.y) <= portal.radius + ball.radius
+        ));
+        if (entry) trace.teleports.add(entry.id);
+      }
+
+      const relayed = tryRelayLaunch(ball, relays);
+      if (relayed) trace.relayLaunches.add(relayed.id);
+
+      const capturedLauncher = tryLauncherCapture(ball, level.launchers);
+      if (capturedLauncher) {
+        trace.launcherReturns += 1;
+        captured = true;
+        trace.frames += i + 1;
+        break;
+      }
+
+      ball.vx *= 0.998;
+      ball.vy *= 0.998;
+      trace.frames += 1;
+
+      if (targetHitThisFrame(previous, ball, level.target, ball.radius, teleported || Boolean(relayed))) {
+        trace.solved = true;
+        return trace;
+      }
+
+      if (Math.hypot(ball.vx, ball.vy) < 28) {
+        return trace;
+      }
     }
 
-    const relayed = tryRelayLaunch(ball, relays);
-    if (relayed) trace.relayLaunches.add(relayed.id);
-
-    ball.vx *= 0.998;
-    ball.vy *= 0.998;
-    trace.frames = i + 1;
-
-    if (targetHitThisFrame(previous, ball, level.target, ball.radius, teleported || Boolean(relayed))) {
-      trace.solved = true;
-      return trace;
-    }
-
-    if (Math.hypot(ball.vx, ball.vy) < 28) {
+    if (!captured) {
       return trace;
     }
   }
@@ -215,6 +243,12 @@ test('difficulty adds mechanics over time', () => {
   assert.ok(levels[13].portals.length >= 2);
   assert.ok(levels[14].relayLaunchers.length >= 1);
   assert.ok(levels[15].obstacles.some((obstacle) => obstacle.material === 'sticky'));
+  assert.ok(levels[15].requiredMechanics.includes('launcherReturn'));
+  assert.ok(levels[15].requiredMechanics.includes('relay'));
+  assert.ok(levels[15].requiredMechanics.includes('portal'));
+  assert.ok(levels[15].switches.length >= 1);
+  assert.ok(levels[15].doors.length >= 1);
+  assert.ok(levels[15].solutionShots.length >= 2);
 });
 
 test('arena boundary rules discourage unintended outer-wall play', () => {
@@ -268,6 +302,9 @@ test('declared mechanics are actually used by the authored default solution', ()
     }
     if (level.requiredMechanics.includes('switchDoor')) {
       assert.ok(trace.switchHits.size > 0, `${level.name} should hit a switch`);
+    }
+    if (level.requiredMechanics.includes('launcherReturn')) {
+      assert.ok(trace.launcherReturns > 0, `${level.name} should return to the start launcher`);
     }
     if (level.requiredMechanics.includes('movingGate')) {
       assert.ok(trace.hitMovingObstacle, `${level.name} should hit a moving obstacle`);

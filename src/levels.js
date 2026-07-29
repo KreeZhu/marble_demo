@@ -327,20 +327,37 @@
     },
     {
       order: 16,
-      name: '咖啡禁区',
-      focus: '卸力墙禁区',
-      hint: '咖啡色卸力墙会吃掉球的速度，碰到就会停住。绕开它，用墙面反弹命中 B 点。',
-      requiredMechanics: ['wallBounce'],
-      arenaWalls: topBounceWalls,
+      name: '回环终局',
+      focus: '回收再发射',
+      hint: '第一发向左触发红按钮并借左墙回到 A 点；红门保持打开后，第二发再进 R1 和传送门命中 B 点。',
+      requiredMechanics: ['switchDoor', 'wallBounce', 'launcherReturn', 'relay', 'portal'],
+      arenaWalls: leftBounceWalls,
       target: { x: 820, y: 300, radius: 18 },
       launchers: [
-        { id: 'A1', x: 120, y: 300, angle: -37, power: 700 },
+        { id: 'A1', x: 120, y: 300, angle: 180, power: 700 },
       ],
-      relayLaunchers: [],
+      solutionShots: [
+        { launcherId: 'A1', angle: 180 },
+        { launcherId: 'A1', angle: 0 },
+      ],
+      relayLaunchers: [
+        { id: 'R1', x: 420, y: 300, radius: 24, angle: 0, power: 700, movable: false, purpose: '红门打开后承接第二发，把球送进传送门。' },
+      ],
       obstacles: [
-        { id: 'sticky-deadzone', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，碰到后球会停住，用来封锁危险直达区域。', x: 395, y: 245, width: 170, height: 110 },
+        { id: 'upper-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，封住高位偷线。', x: 250, y: 190, width: 300, height: 32 },
+        { id: 'lower-sticky-rail', role: 'deadzone', material: 'sticky', purpose: '咖啡色卸力墙，封住低位偷线。', x: 250, y: 378, width: 300, height: 32 },
+        { id: 'moving-sentry', role: 'movingGate', purpose: '第二段路线附近的移动限制，逼迫玩家观察开门后的发射时机。', x: 548, y: 112, width: 26, height: 82, path: { x: 0, y: 54 }, speed: 1.1, phase: -1.25 },
       ],
-      portals: [],
+      switches: [
+        { id: 'red-switch-1', color: 'red', purpose: '第一发必须先触发的红按钮，打开 R1 后方红门。', x: 72, y: 300, radius: 18 },
+      ],
+      doors: [
+        { id: 'red-door-1', color: 'red', purpose: '红按钮触发后打开，允许第二段从 R1 进入传送门。', x: 610, y: 220, width: 42, height: 160 },
+      ],
+      portals: [
+        { id: 'blue', purpose: '红门打开后进入的传送入口。', x: 700, y: 300, radius: 18, pairId: 'orange' },
+        { id: 'orange', purpose: '出口把球送到 B 点前方。', x: 774, y: 300, radius: 18, pairId: 'blue', exitAngle: 0 },
+      ],
     },
   ];
 

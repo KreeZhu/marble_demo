@@ -9,6 +9,7 @@ const {
   segmentCircleHit,
   tryTeleport,
   tryRelayLaunch,
+  tryLauncherCapture,
   resolveObstacleBounce,
   resolveShapedObstacleBounce,
   targetHitThisFrame,
@@ -81,6 +82,23 @@ test('relay launcher re-fires the ball using its own direction and power', () =>
   assert.equal(Math.round(ball.vy), -420);
   assert.ok(ball.y < 180);
   assert.ok(ball.relayCooldown > 0);
+});
+
+test('start launcher can capture a returning ball without resetting state', () => {
+  const ball = createBall({ x: 120, y: 180, vx: -80, vy: 0, radius: 8 });
+  ball.originLauncherId = 'A1';
+  const launchers = [
+    { id: 'A1', x: 120, y: 180, radius: 22 },
+    { id: 'A2', x: 260, y: 180, radius: 22 },
+  ];
+
+  const captured = tryLauncherCapture(ball, launchers);
+
+  assert.equal(captured.id, 'A1');
+  assert.equal(ball.active, false);
+  assert.equal(ball.vx, 0);
+  assert.equal(ball.vy, 0);
+  assert.ok(ball.launcherCooldown > 0);
 });
 
 test('moving obstacle collision reflects the ball using the nearest face', () => {

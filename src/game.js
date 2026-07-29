@@ -8,6 +8,7 @@
     targetHitThisFrame,
     tryTeleport,
     tryRelayLaunch,
+    tryLauncherCapture,
     resolveObstacleBounce,
     resolveShapedObstacleBounce,
     trianglePoints,
@@ -695,15 +696,20 @@
       radius: 9,
     });
     state.ball.active = true;
+    state.ball.originLauncherId = launcher.id;
+    state.ball.launcherCooldown = 0.18;
     state.shots += 1;
-    state.shotEvents = {
-      wallBounces: 0,
-      obstacleBounces: new Set(),
-      teleports: new Set(),
-      relayLaunches: new Set(),
-      switchHits: new Set(),
-      hitMovingObstacle: false,
-    };
+    if (!state.shotEvents) {
+      state.shotEvents = {
+        wallBounces: 0,
+        obstacleBounces: new Set(),
+        teleports: new Set(),
+        relayLaunches: new Set(),
+        switchHits: new Set(),
+        launcherReturns: 0,
+        hitMovingObstacle: false,
+      };
+    }
     playSound('shoot');
     setStatus('飞行中。观察短预线之外的真实反弹，再微调下一次发射。', 'var(--amber)');
     syncUi();
@@ -812,6 +818,21 @@
       state.effects.push({ x: relayed.x, y: relayed.y, vx: 0, vy: 0, age: 0, duration: 0.42, radius: 18, color: relayColor });
     }
 
+    const capturedLauncher = tryLauncherCapture(state.ball, state.launchers);
+    if (capturedLauncher) {
+      const capturedIndex = state.launchers.findIndex((launcher) => launcher.id === capturedLauncher.id);
+      if (capturedIndex >= 0) {
+        state.activeLauncherIndex = capturedIndex;
+        state.selectedDeviceType = 'start';
+      }
+      if (state.shotEvents) state.shotEvents.launcherReturns += 1;
+      playSound('relay');
+      setStatus(`${capturedLauncher.id} 接住了球。开关和门不会重置，调整方向后可以再次发射。`, 'var(--green)');
+      syncControlsFromLauncher();
+      syncUi();
+      return;
+    }
+
     if (switchHit) playSound('success');
     else if (relayed) playSound('relay');
     else if (teleported) playSound('portal');
@@ -853,6 +874,8 @@
   function simulatePreview(launcher, levelData, obstacleData, relayData, options = {}) {
     const vector = launcherVector(launcher);
     const ball = createBall({ x: launcher.x, y: launcher.y, vx: vector.x * vector.speed, vy: vector.y * vector.speed, radius: 9 });
+    ball.originLauncherId = launcher.id;
+    ball.launcherCooldown = 0.18;
     const previewObstacles = obstacleData.map((obstacle) => ({ ...obstacle, path: obstacle.path ? { ...obstacle.path } : undefined }));
     const previewSwitches = (levelData.switches || []).map((switchItem) => ({ ...switchItem, activated: false }));
     const previewDoors = (levelData.doors || []).map((door) => ({ ...door, open: false }));
@@ -884,6 +907,10 @@
       if (options.includeRelays) {
         const relayed = tryRelayLaunch(ball, relayData);
         if (relayed) points.push({ break: true });
+      }
+      if (tryLauncherCapture(ball, levelData.launchers || [])) {
+        points.push({ x: ball.x, y: ball.y });
+        break;
       }
       ball.vx *= 0.998;
       ball.vy *= 0.998;
