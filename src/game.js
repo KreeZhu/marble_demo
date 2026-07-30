@@ -65,7 +65,6 @@
     saveCustomLevel: document.querySelector('#saveCustomLevel'),
     playEditedLevel: document.querySelector('#playEditedLevel'),
     backToMenuFromEditor: document.querySelector('#backToMenuFromEditor'),
-    deleteCustomLevel: document.querySelector('#deleteCustomLevel'),
     editorTools: [...document.querySelectorAll('[data-editor-tool]')],
     editorSelectedType: document.querySelector('#editorSelectedType'),
     editorX: document.querySelector('#editorX'),
@@ -604,6 +603,9 @@
         state.editor.draft = levelToDraft(custom);
         state.editor.savedId = custom.id;
       }
+    } else {
+      state.editor.draft = createEditorDraft();
+      state.editor.savedId = null;
     }
     state.editor.selected = { type: 'launcher', index: 0 };
     ui.editorLevelName.value = state.editor.draft.name;
@@ -2175,6 +2177,7 @@
     syncLevelMenu();
     syncEditorUi();
     setEditorStatus('关卡已保存，并已加入关卡菜单。', 'var(--green)');
+    openLevelMenu();
     return custom.id;
   }
 
@@ -2195,30 +2198,6 @@
     ui.editorPanel.classList.add('hidden');
     state.levelIndex = allLevels().length - 1;
     resetLevel();
-  }
-
-  function deleteCurrentCustomLevel() {
-    if (!state.editor.savedId) {
-      state.editor.draft = createEditorDraft();
-      state.editor.selected = { type: 'launcher', index: 0 };
-      ui.editorLevelName.value = state.editor.draft.name;
-      setEditorStatus('当前是未保存的新关卡，已清空草稿。', 'var(--amber)');
-      syncEditorUi();
-      return;
-    }
-    const existingIndex = state.customLevels.findIndex((item) => item.id === state.editor.savedId);
-    if (existingIndex >= 0) {
-      state.customLevels.splice(existingIndex, 1);
-      state.customLevels = state.customLevels.map((item, index) => normalizeCustomLevel(item, index)).filter(Boolean);
-      saveCustomLevels();
-    }
-    state.editor.draft = createEditorDraft();
-    state.editor.savedId = null;
-    state.editor.selected = { type: 'launcher', index: 0 };
-    ui.editorLevelName.value = state.editor.draft.name;
-    setEditorStatus('自定义关卡已删除。', 'var(--red)');
-    syncLevelMenu();
-    syncEditorUi();
   }
 
   function exitEditorWithoutSaving() {
@@ -2288,7 +2267,6 @@
   ui.saveCustomLevel.addEventListener('click', saveEditedLevel);
   ui.playEditedLevel.addEventListener('click', playEditedLevel);
   ui.backToMenuFromEditor.addEventListener('click', exitEditorWithoutSaving);
-  ui.deleteCustomLevel.addEventListener('click', deleteCurrentCustomLevel);
   ui.deleteEditorObject.addEventListener('click', deleteEditorSelection);
   [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed].forEach((input) => {
     input.addEventListener('input', applyEditorPropertyChange);
