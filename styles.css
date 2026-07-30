@@ -49,6 +49,10 @@ input {
   padding: 18px;
 }
 
+.shell[data-map-size="medium"] {
+  width: min(1760px, 100vw);
+}
+
 .start-screen {
   position: fixed;
   inset: 0;
@@ -584,8 +588,13 @@ input[type="range"] {
 }
 
 .segmented button.relay.active {
-  border-color: var(--purple);
-  background: rgba(155, 124, 255, 0.18);
+  border-color: var(--green);
+  background: rgba(65, 214, 146, 0.16);
+}
+
+button:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 .actions {

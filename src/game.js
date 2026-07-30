@@ -65,6 +65,10 @@
     saveCustomLevel: document.querySelector('#saveCustomLevel'),
     playEditedLevel: document.querySelector('#playEditedLevel'),
     backToMenuFromEditor: document.querySelector('#backToMenuFromEditor'),
+    undoEditor: document.querySelector('#undoEditor'),
+    redoEditor: document.querySelector('#redoEditor'),
+    editorMapSmall: document.querySelector('#editorMapSmall'),
+    editorMapMedium: document.querySelector('#editorMapMedium'),
     editorTools: [...document.querySelectorAll('[data-editor-tool]')],
     editorSelectedType: document.querySelector('#editorSelectedType'),
     editorX: document.querySelector('#editorX'),
@@ -83,10 +87,24 @@
     editorStatus: document.querySelector('#editorStatus'),
   };
 
-  const arena = { x: 36, y: 36, width: 888, height: 528 };
+  const mapSizes = {
+    small: {
+      label: '小型地图',
+      canvas: { width: 960, height: 600 },
+      arena: { x: 36, y: 36, width: 888, height: 528 },
+    },
+    medium: {
+      label: '中型地图',
+      canvas: { width: 1440, height: 900 },
+      arena: { x: 54, y: 54, width: 1332, height: 792 },
+    },
+  };
+  const arena = { ...mapSizes.small.arena };
   const soundVolume = 1.9;
-  const relayColor = '#9b7cff';
-  const relayGlow = 'rgba(155, 124, 255, 0.42)';
+  const launcherColor = '#41d692';
+  const launcherGlow = 'rgba(65, 214, 146, 0.42)';
+  const relayColor = launcherColor;
+  const relayGlow = launcherGlow;
   const stickyArenaWalls = { top: 'sticky', right: 'sticky', bottom: 'sticky', left: 'sticky' };
   const art = {
     metal: '#596977',
@@ -139,6 +157,9 @@
       dragMode: null,
       dragOffset: { x: 0, y: 0 },
       transformStart: null,
+      history: [],
+      redoHistory: [],
+      pendingSnapshot: null,
     },
   };
 
@@ -176,6 +197,79 @@
     return normalized;
   }
 
+  function normalizeMapSize(size) {
+    return size === 'medium' ? 'medium' : 'small';
+  }
+
+  function mapConfig(size = 'small') {
+    return mapSizes[normalizeMapSize(size)] || mapSizes.small;
+  }
+
+  function applyMapSize(size = 'small') {
+    const normalized = normalizeMapSize(size);
+    const config = mapConfig(normalized);
+    if (canvas.width !== config.canvas.width) canvas.width = config.canvas.width;
+    if (canvas.height !== config.canvas.height) canvas.height = config.canvas.height;
+    Object.assign(arena, config.arena);
+    ui.shell.dataset.mapSize = normalized;
+  }
+
+  function currentMapSize(levelData = level()) {
+    return normalizeMapSize(levelData?.mapSize);
+  }
+
+  function scalePointBetweenMaps(point, fromSize, toSize) {
+    const from = mapConfig(fromSize).arena;
+    const to = mapConfig(toSize).arena;
+    return {
+      x: to.x + ((point.x - from.x) / from.width) * to.width,
+      y: to.y + ((point.y - from.y) / from.height) * to.height,
+    };
+  }
+
+  function scaleDraftBetweenMaps(draft, fromSize, toSize) {
+    const from = mapConfig(fromSize).arena;
+    const to = mapConfig(toSize).arena;
+    const scaleX = to.width / from.width;
+    const scaleY = to.height / from.height;
+    const scaleRadius = (scaleX + scaleY) / 2;
+    const scalePosition = (object) => {
+      if (!object) return;
+      const point = scalePointBetweenMaps(object, fromSize, toSize);
+      object.x = point.x;
+      object.y = point.y;
+    };
+    const scaleBox = (object) => {
+      if (!object) return;
+      scalePosition(object);
+      if (Number.isFinite(object.width)) object.width *= scaleX;
+      if (Number.isFinite(object.height)) object.height *= scaleY;
+    };
+    const scaleCircle = (object) => {
+      if (!object) return;
+      scalePosition(object);
+      if (Number.isFinite(object.radius)) object.radius *= scaleRadius;
+      if (Number.isFinite(object.width)) object.width *= scaleRadius;
+      if (Number.isFinite(object.height)) object.height *= scaleRadius;
+    };
+
+    scaleCircle(draft.target);
+    draft.launchers.forEach(scaleCircle);
+    draft.relayLaunchers.forEach(scaleCircle);
+    draft.switches.forEach(scaleCircle);
+    draft.portals.forEach(scaleCircle);
+    draft.doors.forEach(scaleBox);
+    draft.obstacles.forEach((obstacle) => {
+      if (obstacle.shape === 'circle') scaleCircle(obstacle);
+      else scaleBox(obstacle);
+      if (obstacle.path) {
+        obstacle.path.x *= scaleX;
+        obstacle.path.y *= scaleY;
+      }
+    });
+    draft.mapSize = normalizeMapSize(toSize);
+  }
+
   function arenaWallModes(levelData = level()) {
     if (!levelData || !levelData.arenaWalls) return normalizeArenaWalls(stickyArenaWalls);
     return normalizeArenaWalls(levelData.arenaWalls);
@@ -183,11 +277,13 @@
 
   function normalizeCustomLevel(level, index) {
     if (!level || !Array.isArray(level.launchers) || !level.target) return null;
+    const normalizedMapSize = normalizeMapSize(level.mapSize);
     return {
       id: level.id || freshId('level'),
       custom: true,
       order: officialLevels.length + index + 1,
       name: String(level.name || `自定义关卡 ${index + 1}`).slice(0, 18),
+      mapSize: normalizedMapSize,
       focus: '自定义布局',
       hint: '这是你保存的自定义关卡。调整发射器，让球碰到 B 点。',
       requiredMechanics: Array.isArray(level.requiredMechanics) ? level.requiredMechanics : [],
@@ -267,6 +363,7 @@
     return {
       id: freshId('draft'),
       name: '我的关卡',
+      mapSize: 'small',
       target: { x: 820, y: 300, radius: 18 },
       launchers: [{ id: 'A1', x: 128, y: 300, angle: 0, power: fixedLauncherPower }],
       relayLaunchers: [],
@@ -289,6 +386,7 @@
       switches: draft.switches,
       doors: draft.doors,
       portals: draft.portals,
+      mapSize: draft.mapSize,
       arenaWalls: draft.arenaWalls,
       requiredMechanics: [],
     }, index);
@@ -300,6 +398,7 @@
     return {
       id: level.id || freshId('draft'),
       name: level.name || '我的关卡',
+      mapSize: normalizeMapSize(level.mapSize),
       target: { ...level.target },
       launchers: level.launchers.map((launcher) => ({ ...launcher, power: fixedLauncherPower })),
       relayLaunchers: (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower, movable: true })),
@@ -404,6 +503,98 @@
   function setEditorStatus(text, tone) {
     ui.editorStatus.textContent = text;
     ui.editorStatus.style.borderLeftColor = tone || 'var(--blue)';
+  }
+
+  function cloneEditorDraft(draft = state.editor.draft) {
+    return JSON.parse(JSON.stringify(draft));
+  }
+
+  function cloneEditorSelection(selection = state.editor.selected) {
+    return selection ? { ...selection } : null;
+  }
+
+  function editorSnapshot() {
+    return {
+      draft: cloneEditorDraft(),
+      savedId: state.editor.savedId,
+      selected: cloneEditorSelection(),
+      tool: state.editor.tool,
+    };
+  }
+
+  function editorDraftKey(draft = state.editor.draft) {
+    return JSON.stringify(draft);
+  }
+
+  function resetEditorHistory() {
+    state.editor.history = [];
+    state.editor.redoHistory = [];
+    state.editor.pendingSnapshot = null;
+    syncEditorHistoryButtons();
+  }
+
+  function syncEditorHistoryButtons() {
+    if (!ui.undoEditor || !ui.redoEditor) return;
+    ui.undoEditor.disabled = state.editor.history.length === 0 && !state.editor.pendingSnapshot;
+    ui.redoEditor.disabled = state.editor.redoHistory.length === 0;
+  }
+
+  function beginEditorHistory() {
+    if (state.mode !== 'editor') return;
+    if (!state.editor.pendingSnapshot) state.editor.pendingSnapshot = editorSnapshot();
+    syncEditorHistoryButtons();
+  }
+
+  function commitEditorHistory() {
+    const snapshot = state.editor.pendingSnapshot;
+    if (!snapshot) return false;
+    state.editor.pendingSnapshot = null;
+    if (editorDraftKey(snapshot.draft) !== editorDraftKey()) {
+      state.editor.history.push(snapshot);
+      if (state.editor.history.length > 80) state.editor.history.shift();
+      state.editor.redoHistory = [];
+      syncEditorHistoryButtons();
+      return true;
+    }
+    syncEditorHistoryButtons();
+    return false;
+  }
+
+  function restoreEditorSnapshot(snapshot) {
+    state.editor.draft = cloneEditorDraft(snapshot.draft);
+    state.editor.savedId = snapshot.savedId;
+    state.editor.selected = cloneEditorSelection(snapshot.selected) || { type: 'launcher', index: 0 };
+    state.editor.tool = snapshot.tool || 'start';
+    ui.editorLevelName.value = state.editor.draft.name;
+    applyMapSize(state.editor.draft.mapSize);
+    syncEditorUi();
+  }
+
+  function undoEditorChange() {
+    if (state.mode !== 'editor') return;
+    commitEditorHistory();
+    const snapshot = state.editor.history.pop();
+    if (!snapshot) {
+      syncEditorHistoryButtons();
+      return;
+    }
+    state.editor.redoHistory.push(editorSnapshot());
+    restoreEditorSnapshot(snapshot);
+    setEditorStatus('已撤销到上一次有效调整。', 'var(--amber)');
+    syncEditorHistoryButtons();
+  }
+
+  function redoEditorChange() {
+    if (state.mode !== 'editor') return;
+    const snapshot = state.editor.redoHistory.pop();
+    if (!snapshot) {
+      syncEditorHistoryButtons();
+      return;
+    }
+    state.editor.history.push(editorSnapshot());
+    restoreEditorSnapshot(snapshot);
+    setEditorStatus('已重做刚才撤销的调整。', 'var(--green)');
+    syncEditorHistoryButtons();
   }
 
   function ensureAudio() {
@@ -607,7 +798,9 @@
       state.editor.draft = createEditorDraft();
       state.editor.savedId = null;
     }
+    applyMapSize(state.editor.draft.mapSize);
     state.editor.selected = { type: 'launcher', index: 0 };
+    resetEditorHistory();
     ui.editorLevelName.value = state.editor.draft.name;
     setEditorStatus('选择组件后，在画布中拖动摆放。保存后会加入关卡菜单。', 'var(--blue)');
     syncEditorUi();
@@ -650,6 +843,7 @@
   }
 
   function resetLevel(keepStatus) {
+    applyMapSize(currentMapSize());
     state.ball = null;
     state.shots = 0;
     state.completed = false;
@@ -1616,7 +1810,7 @@
     const current = level();
     drawPreviewPath(
       simulatePreview(activeLauncher(), current, state.obstacles, state.relayLaunchers, { includeRelays: true }),
-      '#41d692',
+      launcherColor,
       state.selectedDeviceType === 'start' ? 0.68 : 0.38,
     );
     state.relayLaunchers.forEach((relay, index) => {
@@ -1631,7 +1825,7 @@
   function drawLaunchers() {
     state.launchers.forEach((launcher, index) => {
       const active = state.selectedDeviceType === 'start' && index === state.activeLauncherIndex;
-      drawLauncherShape(launcher, active ? '#41d692' : '#8a98a4', launcher.id.replace('A', ''), active);
+      drawLauncherShape(launcher, active ? launcherColor : '#8a98a4', launcher.id.replace('A', ''), active);
     });
   }
 
@@ -1736,8 +1930,8 @@
     }));
     drawArena(draft);
     draft.launchers.forEach((launcher, index) => {
-      drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers, { includeRelays: true }), '#41d692', 0.45);
-      drawLauncherShape(launcher, '#41d692', launcher.id.replace('A', ''), selectedIs('launcher', index));
+      drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers, { includeRelays: true }), launcherColor, 0.45);
+      drawLauncherShape(launcher, launcherColor, launcher.id.replace('A', ''), selectedIs('launcher', index));
     });
     draft.relayLaunchers.forEach((relay, index) => {
       drawPreviewPath(simulatePreview(relay, draft, obstacles, draft.relayLaunchers, { includeRelays: false }), relayColor, 0.5);
@@ -1798,6 +1992,16 @@
     const object = getEditorObject();
     ui.editorLevelName.value = state.editor.draft.name;
     ui.editorSelectedType.textContent = editorSelectionLabel();
+    const mapSize = normalizeMapSize(state.editor.draft.mapSize);
+    ui.editorMapSmall.classList.toggle('active', mapSize === 'small');
+    ui.editorMapMedium.classList.toggle('active', mapSize === 'medium');
+    ui.editorX.min = String(arena.x);
+    ui.editorY.min = String(arena.y);
+    ui.editorX.max = String(canvas.width);
+    ui.editorY.max = String(canvas.height);
+    ui.editorWidth.max = String(arena.width);
+    ui.editorHeight.max = String(arena.height);
+    ui.editorRadius.max = String(Math.round(Math.min(arena.width, arena.height) / 3));
     const hasObject = Boolean(object);
     ui.deleteEditorObject.classList.toggle('hidden', !hasObject || state.editor.selected.type === 'target');
     const launcherVisible = hasObject && (state.editor.selected.type === 'launcher' || state.editor.selected.type === 'relay');
@@ -1834,6 +2038,7 @@
       ui.editorSpeed.value = Number(object.speed || 1).toFixed(1);
     }
     ui.editorTools.forEach((button) => button.classList.toggle('active', button.dataset.editorTool === state.editor.tool));
+    syncEditorHistoryButtons();
     syncCustomLevelList();
   }
 
@@ -1891,6 +2096,7 @@
   }
 
   function addEditorObject(tool) {
+    beginEditorHistory();
     const draft = state.editor.draft;
     if (tool === 'start') {
       const id = `A${draft.launchers.length + 1}`;
@@ -1929,8 +2135,22 @@
       draft.portals.push({ id: orangeId, purpose: '自定义出口传送门。', x: 690, y: 300, radius: 18, pairId: blueId, exitAngle: 0 });
       state.editor.selected = { type: 'portal', index: draft.portals.length - 2 };
     }
+    commitEditorHistory();
     state.editor.tool = tool;
     setEditorStatus(`${editorSelectionLabel()} 已添加。可以直接拖动或修改右侧数值。`, 'var(--amber)');
+    syncEditorUi();
+  }
+
+  function switchEditorMapSize(size) {
+    const nextSize = normalizeMapSize(size);
+    const currentSize = normalizeMapSize(state.editor.draft.mapSize);
+    if (nextSize === currentSize) return;
+    beginEditorHistory();
+    scaleDraftBetweenMaps(state.editor.draft, currentSize, nextSize);
+    applyMapSize(nextSize);
+    clampEditorObject(getEditorObject());
+    commitEditorHistory();
+    setEditorStatus(`已切换到${mapConfig(nextSize).label}，现有组件已按比例放大/缩小。`, 'var(--green)');
     syncEditorUi();
   }
 
@@ -2089,6 +2309,7 @@
   function applyEditorPropertyChange() {
     const object = getEditorObject();
     if (!object) return;
+    beginEditorHistory();
     object.x = Number(ui.editorX.value);
     object.y = Number(ui.editorY.value);
     if (state.editor.selected.type === 'obstacle') {
@@ -2135,27 +2356,35 @@
         setEditorStatus('至少需要保留一个 A 发射器。', 'var(--red)');
         return;
       }
+      beginEditorHistory();
       draft.launchers.splice(selection.index, 1);
       draft.launchers.forEach((launcher, index) => { launcher.id = `A${index + 1}`; });
     } else if (selection.type === 'relay') {
+      beginEditorHistory();
       draft.relayLaunchers.splice(selection.index, 1);
       draft.relayLaunchers.forEach((relay, index) => { relay.id = `R${index + 1}`; });
     } else if (selection.type === 'obstacle') {
+      beginEditorHistory();
       draft.obstacles.splice(selection.index, 1);
     } else if (selection.type === 'switch') {
+      beginEditorHistory();
       draft.switches.splice(selection.index, 1);
     } else if (selection.type === 'door') {
+      beginEditorHistory();
       draft.doors.splice(selection.index, 1);
     } else if (selection.type === 'portal') {
+      beginEditorHistory();
       const portal = draft.portals[selection.index];
       draft.portals = draft.portals.filter((item) => item.id !== portal.id && item.id !== portal.pairId);
     }
     state.editor.selected = { type: 'launcher', index: 0 };
+    commitEditorHistory();
     setEditorStatus('组件已删除。', 'var(--amber)');
     syncEditorUi();
   }
 
   function saveEditedLevel() {
+    commitEditorHistory();
     const draft = state.editor.draft;
     draft.name = ui.editorLevelName.value.trim() || '我的关卡';
     if (draft.launchers.length === 0 || !draft.target) {
@@ -2182,6 +2411,7 @@
   }
 
   function playEditedLevel() {
+    commitEditorHistory();
     const draft = state.editor.draft;
     draft.name = ui.editorLevelName.value.trim() || '试玩草稿';
     if (draft.launchers.length === 0 || !draft.target) {
@@ -2201,6 +2431,7 @@
   }
 
   function exitEditorWithoutSaving() {
+    commitEditorHistory();
     state.editor.draft = createEditorDraft();
     state.editor.savedId = null;
     state.editor.selected = { type: 'launcher', index: 0 };
@@ -2254,23 +2485,37 @@
     button.addEventListener('click', () => addEditorObject(button.dataset.editorTool));
   });
   ui.editorLevelName.addEventListener('input', () => {
+    beginEditorHistory();
     state.editor.draft.name = ui.editorLevelName.value;
   });
+  ui.editorLevelName.addEventListener('change', commitEditorHistory);
+  ui.editorLevelName.addEventListener('blur', commitEditorHistory);
   ui.newCustomLevel.addEventListener('click', () => {
+    beginEditorHistory();
     state.editor.draft = createEditorDraft();
     state.editor.savedId = null;
     state.editor.selected = { type: 'launcher', index: 0 };
     ui.editorLevelName.value = state.editor.draft.name;
+    applyMapSize(state.editor.draft.mapSize);
+    commitEditorHistory();
     setEditorStatus('已创建新的空白关卡。', 'var(--blue)');
     syncEditorUi();
   });
+  ui.undoEditor.addEventListener('click', undoEditorChange);
+  ui.redoEditor.addEventListener('click', redoEditorChange);
+  ui.editorMapSmall.addEventListener('click', () => switchEditorMapSize('small'));
+  ui.editorMapMedium.addEventListener('click', () => switchEditorMapSize('medium'));
   ui.saveCustomLevel.addEventListener('click', saveEditedLevel);
   ui.playEditedLevel.addEventListener('click', playEditedLevel);
   ui.backToMenuFromEditor.addEventListener('click', exitEditorWithoutSaving);
   ui.deleteEditorObject.addEventListener('click', deleteEditorSelection);
   [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed].forEach((input) => {
     input.addEventListener('input', applyEditorPropertyChange);
-    input.addEventListener('change', applyEditorPropertyChange);
+    input.addEventListener('change', () => {
+      applyEditorPropertyChange();
+      commitEditorHistory();
+    });
+    input.addEventListener('blur', commitEditorHistory);
   });
 
   canvas.addEventListener('pointerdown', (event) => {
@@ -2278,6 +2523,7 @@
       const point = screenToWorld(event);
       const transformHandle = hitEditorTransformHandle(point);
       if (transformHandle) {
+        beginEditorHistory();
         beginEditorTransform(point, transformHandle);
         canvas.setPointerCapture(event.pointerId);
         setEditorStatus(transformHandle.mode === 'rotate' ? '拖动蓝色旋转手柄调整墙体角度。' : '拖动白色尺寸手柄调整墙体大小。', 'var(--amber)');
@@ -2288,6 +2534,7 @@
       if (selection) {
         state.editor.selected = selection;
         const object = getEditorObject(selection);
+        beginEditorHistory();
         state.editor.dragging = true;
         state.editor.dragMode = 'move';
         state.editor.dragOffset = { x: point.x - object.x, y: point.y - object.y };
@@ -2331,6 +2578,7 @@
 
   canvas.addEventListener('pointerup', (event) => {
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
+    if (state.mode === 'editor') commitEditorHistory();
     state.draggingAim = false;
     state.dragMode = null;
     state.editor.dragging = false;
@@ -2354,11 +2602,20 @@
     const editingText = isFormEditingTarget(event.target);
     const usingCommand = isCommandTarget(event.target);
     const defaultShootKey = event.code === 'Space' || event.code === 'Enter';
+    const key = event.key.toLowerCase();
+    const editorUndoKey = state.mode === 'editor' && (event.ctrlKey || event.metaKey) && key === 'z' && !event.shiftKey;
+    const editorRedoKey = state.mode === 'editor' && (event.ctrlKey || event.metaKey) && (key === 'y' || (key === 'z' && event.shiftKey));
 
-    if (defaultShootKey && state.mode === 'play' && !editingText && !usingCommand && ui.dialog.classList.contains('hidden')) {
+    if (editorUndoKey) {
+      event.preventDefault();
+      undoEditorChange();
+    } else if (editorRedoKey) {
+      event.preventDefault();
+      redoEditorChange();
+    } else if (defaultShootKey && state.mode === 'play' && !editingText && !usingCommand && ui.dialog.classList.contains('hidden')) {
       event.preventDefault();
       if (!event.repeat) shoot();
-    } else if (!editingText && event.key.toLowerCase() === 'r' && state.mode === 'play') {
+    } else if (!editingText && key === 'r' && state.mode === 'play') {
       resetLevel();
     } else if (!editingText && event.key === 'Escape') {
       openLevelMenu();
