@@ -23,6 +23,7 @@
   const canvas = document.querySelector('#game');
   const ctx = canvas.getContext('2d');
   const customStorageKey = 'pinballSandboxCustomLevels.v1';
+  const overrideStorageKey = 'pinballSandboxLevelOverrides.v1';
   const fixedLauncherPower = 700;
   canvas.tabIndex = 0;
 
@@ -36,6 +37,7 @@
     levelGrid: document.querySelector('#levelGrid'),
     openEditor: document.querySelector('#openEditor'),
     openMenu: document.querySelector('#openMenu'),
+    editCurrentLevel: document.querySelector('#editCurrentLevel'),
     playPanel: document.querySelector('#playPanel'),
     editorPanel: document.querySelector('#editorPanel'),
     prevLevel: document.querySelector('#prevLevel'),
@@ -136,6 +138,7 @@
     obstacles: [],
     completed: false,
     completedLevels: new Set(),
+    levelOverrides: loadLevelOverrides(),
     customLevels: loadCustomLevels(),
     testLevel: null,
     previewDistance: 480,
@@ -151,6 +154,7 @@
     editor: {
       draft: createEditorDraft(),
       savedId: null,
+      source: { type: 'new' },
       selected: null,
       tool: 'start',
       dragging: false,
@@ -166,7 +170,18 @@
   const audio = { context: null, unlocked: false };
 
   function allLevels() {
-    return officialLevels.concat(state.customLevels);
+    const official = officialLevels.map((item, index) => {
+      const override = state.levelOverrides[String(index)];
+      if (!override) return item;
+      return {
+        ...override,
+        custom: false,
+        edited: true,
+        officialIndex: index,
+        order: item.order,
+      };
+    });
+    return official.concat(state.customLevels);
   }
 
   function freshId(prefix) {
@@ -187,6 +202,28 @@
 
   function saveCustomLevels() {
     window.localStorage.setItem(customStorageKey, JSON.stringify(state.customLevels));
+  }
+
+  function loadLevelOverrides() {
+    try {
+      const raw = window.localStorage.getItem(overrideStorageKey);
+      if (!raw) return {};
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+      return Object.entries(parsed).reduce((overrides, [key, levelData]) => {
+        const index = Number(key);
+        if (!Number.isInteger(index) || !officialLevels[index]) return overrides;
+        const normalized = normalizeOfficialOverride(levelData, index);
+        if (normalized) overrides[String(index)] = normalized;
+        return overrides;
+      }, {});
+    } catch {
+      return {};
+    }
+  }
+
+  function saveLevelOverrides() {
+    window.localStorage.setItem(overrideStorageKey, JSON.stringify(state.levelOverrides));
   }
 
   function normalizeArenaWalls(walls = stickyArenaWalls) {
@@ -347,6 +384,23 @@
     };
   }
 
+  function normalizeOfficialOverride(level, index) {
+    if (!officialLevels[index]) return null;
+    const normalized = normalizeCustomLevel(level, 0);
+    if (!normalized) return null;
+    return {
+      ...normalized,
+      id: `official-${index + 1}`,
+      custom: false,
+      edited: true,
+      officialIndex: index,
+      order: officialLevels[index].order,
+      focus: level.focus || '已编辑布局',
+      hint: level.hint || '这是你修改后的关卡。调整发射器，让球碰到 B 点。',
+      requiredMechanics: [],
+    };
+  }
+
   function normalizePortalPairs(portals) {
     return portals.map((portal, index) => ({
       id: portal.id || (index % 2 === 0 ? `blue-${index}` : `orange-${index}`),
@@ -402,10 +456,10 @@
       target: { ...level.target },
       launchers: level.launchers.map((launcher) => ({ ...launcher, power: fixedLauncherPower })),
       relayLaunchers: (level.relayLaunchers || []).map((relay) => ({ ...relay, power: fixedLauncherPower, movable: true })),
-      obstacles: level.obstacles.map((obstacle) => ({ ...obstacle, path: obstacle.path ? { ...obstacle.path } : undefined })),
+      obstacles: (level.obstacles || []).map((obstacle) => ({ ...obstacle, path: obstacle.path ? { ...obstacle.path } : undefined })),
       switches: (level.switches || []).map((switchItem) => ({ ...switchItem, activated: false })),
       doors: (level.doors || []).map((door) => ({ ...door, open: false })),
-      portals: level.portals.map((portal) => ({ ...portal })),
+      portals: (level.portals || []).map((portal) => ({ ...portal })),
       arenaWalls: normalizeArenaWalls(level.arenaWalls),
     };
   }
@@ -517,6 +571,7 @@
     return {
       draft: cloneEditorDraft(),
       savedId: state.editor.savedId,
+      source: { ...state.editor.source },
       selected: cloneEditorSelection(),
       tool: state.editor.tool,
     };
@@ -563,6 +618,7 @@
   function restoreEditorSnapshot(snapshot) {
     state.editor.draft = cloneEditorDraft(snapshot.draft);
     state.editor.savedId = snapshot.savedId;
+    state.editor.source = snapshot.source || { type: state.editor.savedId ? 'custom' : 'new' };
     state.editor.selected = cloneEditorSelection(snapshot.selected) || { type: 'launcher', index: 0 };
     state.editor.tool = snapshot.tool || 'start';
     ui.editorLevelName.value = state.editor.draft.name;
@@ -677,7 +733,8 @@
       if (index === state.levelIndex) button.classList.add('current');
       if (state.completedLevels.has(index)) button.classList.add('completed');
       if (item.custom) button.classList.add('custom');
-      button.innerHTML = `<strong>${item.order}</strong><span>${item.custom ? '自定义' : item.focus}</span>`;
+      if (item.edited) button.classList.add('custom');
+      button.innerHTML = `<strong>${item.order}</strong><span>${item.custom ? '自定义' : item.edited ? '已编辑' : item.focus}</span>`;
       button.addEventListener('click', () => {
         ensureAudio();
         startLevel(index);
@@ -695,7 +752,9 @@
     ui.levelFocus.textContent = current.focus;
     ui.shotCount.textContent = String(state.shots);
     ui.launcherName.textContent = launcher.id;
-    ui.openMenu.textContent = '返回关卡菜单';
+    ui.openMenu.textContent = state.testLevel?.editorTest ? '回到编辑器' : '返回关卡菜单';
+    ui.editCurrentLevel.textContent = state.testLevel?.editorTest ? '编辑器试玩中' : '编辑当前关卡';
+    ui.editCurrentLevel.disabled = Boolean(state.testLevel?.editorTest);
     ui.angleValue.textContent = `${Math.round(launcher.angle)}°`;
     launcher.power = fixedLauncherPower;
     ui.powerValue.textContent = String(fixedLauncherPower);
@@ -793,10 +852,16 @@
       if (custom) {
         state.editor.draft = levelToDraft(custom);
         state.editor.savedId = custom.id;
+        state.editor.source = { type: 'custom', id: custom.id };
+      } else {
+        state.editor.draft = createEditorDraft();
+        state.editor.savedId = null;
+        state.editor.source = { type: 'new' };
       }
     } else {
       state.editor.draft = createEditorDraft();
       state.editor.savedId = null;
+      state.editor.source = { type: 'new' };
     }
     applyMapSize(state.editor.draft.mapSize);
     state.editor.selected = { type: 'launcher', index: 0 };
@@ -806,7 +871,52 @@
     syncEditorUi();
   }
 
+  function openEditorForLevel(index = state.levelIndex) {
+    const levels = allLevels();
+    const selected = levels[index];
+    if (!selected) {
+      openEditor();
+      return;
+    }
+    state.mode = 'editor';
+    state.testLevel = null;
+    state.ball = null;
+    hideCompletionPrompt();
+    ui.startScreen.classList.add('hidden');
+    ui.levelMenu.classList.add('hidden');
+    ui.shell.classList.remove('menu-open');
+    ui.playPanel.classList.add('hidden');
+    ui.editorPanel.classList.remove('hidden');
+    state.editor.draft = levelToDraft(selected);
+    if (index < officialLevels.length) {
+      state.editor.savedId = `official-${index + 1}`;
+      state.editor.source = { type: 'official', index };
+    } else {
+      state.editor.savedId = selected.id;
+      state.editor.source = { type: 'custom', id: selected.id };
+    }
+    applyMapSize(state.editor.draft.mapSize);
+    state.editor.selected = { type: 'launcher', index: 0 };
+    resetEditorHistory();
+    ui.editorLevelName.value = state.editor.draft.name;
+    setEditorStatus('正在编辑当前关卡。保存后会替换原来的关卡。', 'var(--green)');
+    syncEditorUi();
+  }
+
   function showCompletionPrompt() {
+    if (state.testLevel?.editorTest) {
+      state.completionResult = {
+        title: '试玩命中成功',
+        body: `草稿可以完成。你用了 ${state.shots} 次发射，可以回编辑器继续调整，也可以直接保存。`,
+      };
+      ui.completeTitle.textContent = state.completionResult.title;
+      ui.completeBody.textContent = state.completionResult.body;
+      ui.continueLevel.textContent = '回到编辑器继续修改';
+      ui.replayLevel.textContent = '保存并返回菜单';
+      ui.dialog.classList.remove('hidden');
+      ui.continueLevel.focus();
+      return;
+    }
     const result = buildCompletionResult({
       levelIndex: state.levelIndex,
       levelCount: allLevels().length,
@@ -2391,6 +2501,29 @@
       setEditorStatus('保存失败：至少需要一个 A 发射器和一个 B 目标。', 'var(--red)');
       return null;
     }
+    if (state.editor.source?.type === 'official') {
+      const index = state.editor.source.index;
+      const custom = draftToLevel(draft, 0);
+      const override = normalizeOfficialOverride({
+        ...custom,
+        id: `official-${index + 1}`,
+        name: draft.name,
+        focus: '已编辑布局',
+        hint: '这是你修改后的关卡。调整发射器，让球碰到 B 点。',
+        requiredMechanics: [],
+      }, index);
+      if (!override) {
+        setEditorStatus('保存失败：找不到原关卡。', 'var(--red)');
+        return null;
+      }
+      state.levelOverrides[String(index)] = override;
+      saveLevelOverrides();
+      state.levelIndex = index;
+      syncLevelMenu();
+      setEditorStatus('关卡已保存，并已替换原关卡。', 'var(--green)');
+      openLevelMenu();
+      return override.id;
+    }
     const existingIndex = state.customLevels.findIndex((item) => item.id === state.editor.savedId);
     const levelIndex = existingIndex >= 0 ? existingIndex : state.customLevels.length;
     const custom = draftToLevel(draft, levelIndex);
@@ -2400,6 +2533,7 @@
       state.customLevels.push(custom);
       state.editor.savedId = custom.id;
       state.editor.draft.id = custom.id;
+      state.editor.source = { type: 'custom', id: custom.id };
     }
     state.customLevels = state.customLevels.map((item, index) => normalizeCustomLevel(item, index)).filter(Boolean);
     saveCustomLevels();
@@ -2421,6 +2555,7 @@
     state.testLevel = draftToLevel(draft, state.customLevels.length);
     state.testLevel.name = `${draft.name}（试玩）`;
     state.testLevel.focus = '草稿试玩';
+    state.testLevel.editorTest = true;
     state.mode = 'play';
     ui.levelMenu.classList.add('hidden');
     ui.shell.classList.remove('menu-open');
@@ -2430,10 +2565,27 @@
     resetLevel();
   }
 
+  function returnToEditorFromTest() {
+    state.mode = 'editor';
+    state.testLevel = null;
+    state.ball = null;
+    state.completed = false;
+    hideCompletionPrompt();
+    ui.startScreen.classList.add('hidden');
+    ui.levelMenu.classList.add('hidden');
+    ui.shell.classList.remove('menu-open');
+    ui.playPanel.classList.add('hidden');
+    ui.editorPanel.classList.remove('hidden');
+    applyMapSize(state.editor.draft.mapSize);
+    setEditorStatus('已回到编辑器，可以继续修改或保存。', 'var(--green)');
+    syncEditorUi();
+  }
+
   function exitEditorWithoutSaving() {
     commitEditorHistory();
     state.editor.draft = createEditorDraft();
     state.editor.savedId = null;
+    state.editor.source = { type: 'new' };
     state.editor.selected = { type: 'launcher', index: 0 };
     ui.editorLevelName.value = state.editor.draft.name;
     openLevelMenu();
@@ -2451,18 +2603,24 @@
     ui.startExitStatus.textContent = '游戏已退出';
     window.close();
   });
-  ui.openMenu.addEventListener('click', openLevelMenu);
+  ui.openMenu.addEventListener('click', () => {
+    if (state.testLevel?.editorTest) returnToEditorFromTest();
+    else openLevelMenu();
+  });
+  ui.editCurrentLevel.addEventListener('click', () => openEditorForLevel(state.levelIndex));
   ui.prevLevel.addEventListener('click', () => startLevel(state.levelIndex - 1));
   ui.nextLevel.addEventListener('click', () => startLevel(state.levelIndex + 1));
   ui.shoot.addEventListener('click', shoot);
   ui.reset.addEventListener('click', () => resetLevel());
   ui.continueLevel.addEventListener('click', () => {
     ensureAudio();
-    openLevelMenu();
+    if (state.testLevel?.editorTest) returnToEditorFromTest();
+    else openLevelMenu();
   });
   ui.replayLevel.addEventListener('click', () => {
     ensureAudio();
-    resetLevel();
+    if (state.testLevel?.editorTest) saveEditedLevel();
+    else resetLevel();
   });
   ui.angle.addEventListener('input', () => {
     if (state.mode !== 'play') return;
@@ -2494,6 +2652,7 @@
     beginEditorHistory();
     state.editor.draft = createEditorDraft();
     state.editor.savedId = null;
+    state.editor.source = { type: 'new' };
     state.editor.selected = { type: 'launcher', index: 0 };
     ui.editorLevelName.value = state.editor.draft.name;
     applyMapSize(state.editor.draft.mapSize);
@@ -2618,7 +2777,8 @@
     } else if (!editingText && key === 'r' && state.mode === 'play') {
       resetLevel();
     } else if (!editingText && event.key === 'Escape') {
-      openLevelMenu();
+      if (state.testLevel?.editorTest) returnToEditorFromTest();
+      else openLevelMenu();
     } else if (!editingText && event.key === 'Delete' && state.mode === 'editor') {
       deleteEditorSelection();
     }
