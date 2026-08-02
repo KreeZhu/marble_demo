@@ -153,6 +153,7 @@
     shotEvents: null,
     activeShotPath: [],
     lastFailedShotPath: null,
+    lastAimPreviewPath: null,
     editor: {
       draft: createEditorDraft(),
       savedId: null,
@@ -559,6 +560,22 @@
   function clearShotPaths() {
     state.activeShotPath = [];
     state.lastFailedShotPath = null;
+    state.lastAimPreviewPath = null;
+  }
+
+  function clearFailedShotPath() {
+    state.activeShotPath = [];
+    state.lastFailedShotPath = null;
+  }
+
+  function rememberAimPreview(launcher, levelData = level()) {
+    state.lastAimPreviewPath = simulatePreview(
+      launcher,
+      levelData,
+      state.obstacles,
+      state.relayLaunchers,
+      { includeRelays: true },
+    ).map((point) => ({ ...point }));
   }
 
   function recordShotPoint(point, options = {}) {
@@ -720,9 +737,17 @@
 
   function playSound(name) {
     if (name === 'shoot') {
-      playTone({ frequency: 150, endFrequency: 92, duration: 0.11, type: 'triangle', gain: 0.11 });
+      playTone({ frequency: 168, endFrequency: 82, duration: 0.14, type: 'triangle', gain: 0.12 });
+      playTone({ frequency: 92, start: 0.055, endFrequency: 54, duration: 0.18, type: 'sine', gain: 0.055 });
+      playTone({ frequency: 220, start: 0.115, endFrequency: 120, duration: 0.16, type: 'triangle', gain: 0.035 });
     } else if (name === 'impact') {
       playTone({ frequency: 290, endFrequency: 180, duration: 0.055, type: 'square', gain: 0.045 });
+    } else if (name === 'boostImpact') {
+      playTone({ frequency: 420, endFrequency: 760, duration: 0.12, type: 'triangle', gain: 0.08 });
+      playTone({ frequency: 840, start: 0.045, endFrequency: 520, duration: 0.1, type: 'sine', gain: 0.045 });
+    } else if (name === 'stickyImpact') {
+      playTone({ frequency: 145, endFrequency: 62, duration: 0.18, type: 'sawtooth', gain: 0.065 });
+      playTone({ frequency: 82, start: 0.05, duration: 0.16, type: 'sine', gain: 0.04 });
     } else if (name === 'portal') {
       playTone({ frequency: 360, endFrequency: 760, duration: 0.13, type: 'sine', gain: 0.07 });
       playTone({ frequency: 180, start: 0.035, endFrequency: 420, duration: 0.12, type: 'triangle', gain: 0.045 });
@@ -1037,7 +1062,8 @@
     const launcher = shotLauncher();
     launcher.power = fixedLauncherPower;
     const vector = launcherVector(launcher);
-    clearShotPaths();
+    clearFailedShotPath();
+    rememberAimPreview(launcher);
     state.ball = createBall({
       x: launcher.x,
       y: launcher.y,
@@ -1133,13 +1159,15 @@
       keepFailedShotPath();
       state.ball.active = false;
       setStatus('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
-      playSound('impact');
+      playSound('stickyImpact');
       syncUi();
       return;
     }
 
     let obstacleBounced = false;
     let stickyHit = false;
+    let boostHit = false;
+    let normalObstacleHit = false;
     state.obstacles.concat(activeDoorObstacles()).forEach((obstacle) => {
       const hitObstacle = resolveShapedObstacleBounce(state.ball, obstacle, obstacleRestitution(obstacle));
       if (hitObstacle && state.shotEvents) {
@@ -1147,6 +1175,8 @@
         if (obstacle.path) state.shotEvents.hitMovingObstacle = true;
       }
       if (hitObstacle && obstacle.material === 'sticky') stickyHit = true;
+      if (hitObstacle && obstacle.material === 'boost') boostHit = true;
+      if (hitObstacle && obstacle.material !== 'boost' && obstacle.material !== 'sticky') normalObstacleHit = true;
       obstacleBounced = hitObstacle || obstacleBounced;
     });
 
@@ -1155,7 +1185,7 @@
       keepFailedShotPath();
       state.ball.active = false;
       setStatus('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
-      playSound('impact');
+      playSound('stickyImpact');
       syncUi();
       return;
     }
@@ -1199,7 +1229,8 @@
     else if (teleported) playSound('portal');
     else if ((wallBounced || obstacleBounced) && performance.now() - state.lastImpactSoundAt > 70) {
       state.lastImpactSoundAt = performance.now();
-      playSound('impact');
+      if (boostHit) playSound('boostImpact');
+      else if (normalObstacleHit || wallBounced) playSound('impact');
     }
 
     state.ball.vx *= 0.998;
@@ -1988,6 +2019,17 @@
     });
   }
 
+  function drawLastAimPreview() {
+    if (state.mode !== 'play') return;
+    if (state.completed) return;
+    if (!state.lastAimPreviewPath || state.lastAimPreviewPath.length < 2) return;
+    drawPreviewPath(
+      state.lastAimPreviewPath,
+      '#b8efff',
+      state.ball && state.ball.active ? 0.46 : 0.32,
+    );
+  }
+
   function drawFailedShotPath() {
     const trace = state.lastFailedShotPath;
     if (!trace || !trace.points || trace.points.length < 2 || state.completed) return;
@@ -2106,6 +2148,7 @@
 
   function renderGame() {
     drawArena(level());
+    drawLastAimPreview();
     drawPreview();
     drawFailedShotPath();
     drawPortals();
