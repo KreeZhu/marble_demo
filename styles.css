@@ -747,6 +747,13 @@ button:disabled {
   font-weight: 800;
 }
 
+.modal-actions .danger-action {
+  border-color: rgba(255, 111, 97, 0.72);
+  background: #ff6f61;
+  color: #1a0907;
+  font-weight: 800;
+}
+
 .status {
   min-height: 54px;
   margin: auto 0 0;

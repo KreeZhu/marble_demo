@@ -62,6 +62,9 @@
     completeBody: document.querySelector('#completeBody'),
     continueLevel: document.querySelector('#continueLevel'),
     replayLevel: document.querySelector('#replayLevel'),
+    unsavedEditorDialog: document.querySelector('#unsavedEditorDialog'),
+    saveEditorExit: document.querySelector('#saveEditorExit'),
+    discardEditorExit: document.querySelector('#discardEditorExit'),
     editorLevelName: document.querySelector('#editorLevelName'),
     newCustomLevel: document.querySelector('#newCustomLevel'),
     saveCustomLevel: document.querySelector('#saveCustomLevel'),
@@ -167,6 +170,7 @@
       history: [],
       redoHistory: [],
       pendingSnapshot: null,
+      savedDraftKey: null,
     },
   };
 
@@ -633,6 +637,24 @@
     return JSON.stringify(draft);
   }
 
+  function markEditorClean() {
+    state.editor.savedDraftKey = editorDraftKey();
+  }
+
+  function editorHasUnsavedChanges() {
+    commitEditorHistory();
+    return editorDraftKey() !== state.editor.savedDraftKey;
+  }
+
+  function hideUnsavedEditorPrompt() {
+    ui.unsavedEditorDialog.classList.add('hidden');
+  }
+
+  function showUnsavedEditorPrompt() {
+    ui.unsavedEditorDialog.classList.remove('hidden');
+    ui.saveEditorExit.focus();
+  }
+
   function resetEditorHistory() {
     state.editor.history = [];
     state.editor.redoHistory = [];
@@ -737,17 +759,22 @@
 
   function playSound(name) {
     if (name === 'shoot') {
-      playTone({ frequency: 168, endFrequency: 82, duration: 0.14, type: 'triangle', gain: 0.12 });
-      playTone({ frequency: 92, start: 0.055, endFrequency: 54, duration: 0.18, type: 'sine', gain: 0.055 });
-      playTone({ frequency: 220, start: 0.115, endFrequency: 120, duration: 0.16, type: 'triangle', gain: 0.035 });
+      playTone({ frequency: 520, endFrequency: 260, duration: 0.055, type: 'square', gain: 0.055 });
+      playTone({ frequency: 210, endFrequency: 95, start: 0.006, duration: 0.18, type: 'triangle', gain: 0.115 });
+      playTone({ frequency: 760, endFrequency: 520, start: 0.035, duration: 0.08, type: 'sine', gain: 0.045 });
+      playTone({ frequency: 260, endFrequency: 130, start: 0.12, duration: 0.16, type: 'triangle', gain: 0.045 });
+      playTone({ frequency: 640, endFrequency: 390, start: 0.19, duration: 0.11, type: 'sine', gain: 0.03 });
     } else if (name === 'impact') {
-      playTone({ frequency: 290, endFrequency: 180, duration: 0.055, type: 'square', gain: 0.045 });
+      playTone({ frequency: 360, endFrequency: 210, duration: 0.05, type: 'square', gain: 0.05 });
+      playTone({ frequency: 520, endFrequency: 300, start: 0.018, duration: 0.06, type: 'triangle', gain: 0.035 });
     } else if (name === 'boostImpact') {
-      playTone({ frequency: 420, endFrequency: 760, duration: 0.12, type: 'triangle', gain: 0.08 });
-      playTone({ frequency: 840, start: 0.045, endFrequency: 520, duration: 0.1, type: 'sine', gain: 0.045 });
+      playTone({ frequency: 440, endFrequency: 880, duration: 0.115, type: 'triangle', gain: 0.08 });
+      playTone({ frequency: 880, endFrequency: 1320, start: 0.03, duration: 0.085, type: 'sine', gain: 0.045 });
+      playTone({ frequency: 660, endFrequency: 990, start: 0.075, duration: 0.07, type: 'triangle', gain: 0.035 });
     } else if (name === 'stickyImpact') {
-      playTone({ frequency: 145, endFrequency: 62, duration: 0.18, type: 'sawtooth', gain: 0.065 });
-      playTone({ frequency: 82, start: 0.05, duration: 0.16, type: 'sine', gain: 0.04 });
+      playTone({ frequency: 170, endFrequency: 58, duration: 0.22, type: 'sawtooth', gain: 0.075 });
+      playTone({ frequency: 92, endFrequency: 48, start: 0.055, duration: 0.19, type: 'sine', gain: 0.05 });
+      playTone({ frequency: 260, endFrequency: 120, start: 0.025, duration: 0.08, type: 'triangle', gain: 0.035 });
     } else if (name === 'portal') {
       playTone({ frequency: 360, endFrequency: 760, duration: 0.13, type: 'sine', gain: 0.07 });
       playTone({ frequency: 180, start: 0.035, endFrequency: 420, duration: 0.12, type: 'triangle', gain: 0.045 });
@@ -864,6 +891,7 @@
     state.ball = null;
     clearShotPaths();
     hideCompletionPrompt();
+    hideUnsavedEditorPrompt();
     ui.startExitStatus.textContent = '';
     ui.startScreen.classList.remove('hidden');
     ui.levelMenu.classList.add('hidden');
@@ -879,6 +907,7 @@
     state.ball = null;
     clearShotPaths();
     hideCompletionPrompt();
+    hideUnsavedEditorPrompt();
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.remove('hidden');
     ui.shell.classList.add('menu-open');
@@ -905,6 +934,7 @@
     state.ball = null;
     clearShotPaths();
     hideCompletionPrompt();
+    hideUnsavedEditorPrompt();
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.add('hidden');
     ui.shell.classList.remove('menu-open');
@@ -929,6 +959,7 @@
     applyMapSize(state.editor.draft.mapSize);
     state.editor.selected = { type: 'launcher', index: 0 };
     resetEditorHistory();
+    markEditorClean();
     ui.editorLevelName.value = state.editor.draft.name;
     setEditorStatus('选择组件后，在画布中拖动摆放。保存后会加入关卡菜单。', 'var(--blue)');
     syncEditorUi();
@@ -962,6 +993,7 @@
     applyMapSize(state.editor.draft.mapSize);
     state.editor.selected = { type: 'launcher', index: 0 };
     resetEditorHistory();
+    markEditorClean();
     ui.editorLevelName.value = state.editor.draft.name;
     setEditorStatus('正在编辑当前关卡。保存后会替换原来的关卡。', 'var(--green)');
     syncEditorUi();
@@ -2629,7 +2661,8 @@
     syncEditorUi();
   }
 
-  function saveEditedLevel() {
+  function saveEditedLevel(options = {}) {
+    const { exitAfterSave = false } = options;
     commitEditorHistory();
     const draft = state.editor.draft;
     draft.name = ui.editorLevelName.value.trim() || '我的关卡';
@@ -2656,8 +2689,10 @@
       saveLevelOverrides();
       state.levelIndex = index;
       syncLevelMenu();
+      markEditorClean();
       setEditorStatus('关卡已保存，并已替换原关卡。', 'var(--green)');
-      openLevelMenu();
+      if (exitAfterSave) openLevelMenu();
+      else syncEditorUi();
       return override.id;
     }
     const existingIndex = state.customLevels.findIndex((item) => item.id === state.editor.savedId);
@@ -2674,9 +2709,10 @@
     state.customLevels = state.customLevels.map((item, index) => normalizeCustomLevel(item, index)).filter(Boolean);
     saveCustomLevels();
     syncLevelMenu();
+    markEditorClean();
     syncEditorUi();
     setEditorStatus('关卡已保存，并已加入关卡菜单。', 'var(--green)');
-    openLevelMenu();
+    if (exitAfterSave) openLevelMenu();
     return custom.id;
   }
 
@@ -2719,11 +2755,20 @@
   }
 
   function exitEditorWithoutSaving() {
-    commitEditorHistory();
+    if (editorHasUnsavedChanges()) {
+      showUnsavedEditorPrompt();
+      return;
+    }
+    discardEditorAndExit();
+  }
+
+  function discardEditorAndExit() {
+    hideUnsavedEditorPrompt();
     state.editor.draft = createEditorDraft();
     state.editor.savedId = null;
     state.editor.source = { type: 'new' };
     state.editor.selected = { type: 'launcher', index: 0 };
+    markEditorClean();
     ui.editorLevelName.value = state.editor.draft.name;
     openLevelMenu();
   }
@@ -2756,7 +2801,7 @@
   });
   ui.replayLevel.addEventListener('click', () => {
     ensureAudio();
-    if (state.testLevel?.editorTest) saveEditedLevel();
+    if (state.testLevel?.editorTest) saveEditedLevel({ exitAfterSave: true });
     else resetLevel();
   });
   ui.angle.addEventListener('input', () => {
@@ -2797,6 +2842,11 @@
     setEditorStatus('已创建新的空白关卡。', 'var(--blue)');
     syncEditorUi();
   });
+  ui.saveEditorExit.addEventListener('click', () => {
+    hideUnsavedEditorPrompt();
+    saveEditedLevel({ exitAfterSave: true });
+  });
+  ui.discardEditorExit.addEventListener('click', discardEditorAndExit);
   ui.undoEditor.addEventListener('click', undoEditorChange);
   ui.redoEditor.addEventListener('click', redoEditorChange);
   ui.editorMapSmall.addEventListener('click', () => switchEditorMapSize('small'));
@@ -2915,6 +2965,7 @@
       resetLevel();
     } else if (!editingText && event.key === 'Escape') {
       if (state.testLevel?.editorTest) returnToEditorFromTest();
+      else if (state.mode === 'editor') exitEditorWithoutSaving();
       else openLevelMenu();
     } else if (!editingText && event.key === 'Delete' && state.mode === 'editor') {
       deleteEditorSelection();

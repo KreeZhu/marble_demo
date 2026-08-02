@@ -120,7 +120,7 @@
 
           <div class="actions">
             <button id="newCustomLevel" type="button">新建</button>
-            <button id="saveCustomLevel" class="primary" type="button">保存并返回菜单</button>
+            <button id="saveCustomLevel" class="primary" type="button">保存</button>
           </div>
 
           <div class="actions">
@@ -200,6 +200,18 @@
           <div class="modal-actions">
             <button id="replayLevel" type="button">重玩本关</button>
             <button id="continueLevel" class="primary" type="button">返回关卡菜单</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="unsavedEditorDialog" class="modal hidden" role="dialog" aria-modal="true" aria-labelledby="unsavedEditorTitle">
+        <div class="modal-panel">
+          <p class="eyebrow">Unsaved changes</p>
+          <h2 id="unsavedEditorTitle">关卡还没有保存</h2>
+          <p id="unsavedEditorBody">你现在退出会丢失这次修改。要先保存再回到菜单吗？</p>
+          <div class="modal-actions">
+            <button id="discardEditorExit" class="danger-action" type="button">不保存并退出</button>
+            <button id="saveEditorExit" class="primary" type="button">保存并退出</button>
           </div>
         </div>
       </div>
