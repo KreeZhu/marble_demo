@@ -151,6 +151,8 @@
     lastImpactSoundAt: 0,
     completionResult: null,
     shotEvents: null,
+    activeShotPath: [],
+    lastFailedShotPath: null,
     editor: {
       draft: createEditorDraft(),
       savedId: null,
@@ -554,6 +556,39 @@
     ui.status.style.borderLeftColor = tone || 'var(--blue)';
   }
 
+  function clearShotPaths() {
+    state.activeShotPath = [];
+    state.lastFailedShotPath = null;
+  }
+
+  function recordShotPoint(point, options = {}) {
+    if (!state.activeShotPath) state.activeShotPath = [];
+    if (options.break) state.activeShotPath.push({ break: true });
+    const last = [...state.activeShotPath].reverse().find((item) => !item.break);
+    if (last && Math.hypot(point.x - last.x, point.y - last.y) < 3) return;
+    state.activeShotPath.push({ x: point.x, y: point.y });
+    if (state.activeShotPath.length > 900) state.activeShotPath.shift();
+  }
+
+  function keepFailedShotPath() {
+    const points = (state.activeShotPath || []).map((point) => ({ ...point }));
+    const visiblePoints = points.filter((point) => !point.break);
+    state.activeShotPath = [];
+    if (visiblePoints.length < 2) {
+      state.lastFailedShotPath = null;
+      return;
+    }
+    state.lastFailedShotPath = {
+      points,
+      age: 0,
+      duration: 4.2,
+    };
+  }
+
+  function clearActiveShotPath() {
+    state.activeShotPath = [];
+  }
+
   function setEditorStatus(text, tone) {
     ui.editorStatus.textContent = text;
     ui.editorStatus.style.borderLeftColor = tone || 'var(--blue)';
@@ -802,6 +837,7 @@
     state.testLevel = null;
     state.draggingAim = false;
     state.ball = null;
+    clearShotPaths();
     hideCompletionPrompt();
     ui.startExitStatus.textContent = '';
     ui.startScreen.classList.remove('hidden');
@@ -816,6 +852,7 @@
     state.testLevel = null;
     state.draggingAim = false;
     state.ball = null;
+    clearShotPaths();
     hideCompletionPrompt();
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.remove('hidden');
@@ -841,6 +878,7 @@
     state.mode = 'editor';
     state.testLevel = null;
     state.ball = null;
+    clearShotPaths();
     hideCompletionPrompt();
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.add('hidden');
@@ -881,6 +919,7 @@
     state.mode = 'editor';
     state.testLevel = null;
     state.ball = null;
+    clearShotPaths();
     hideCompletionPrompt();
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.add('hidden');
@@ -955,6 +994,7 @@
   function resetLevel(keepStatus) {
     applyMapSize(currentMapSize());
     state.ball = null;
+    clearShotPaths();
     state.shots = 0;
     state.completed = false;
     state.effects = [];
@@ -997,6 +1037,7 @@
     const launcher = shotLauncher();
     launcher.power = fixedLauncherPower;
     const vector = launcherVector(launcher);
+    clearShotPaths();
     state.ball = createBall({
       x: launcher.x,
       y: launcher.y,
@@ -1007,6 +1048,7 @@
     state.ball.active = true;
     state.ball.originLauncherId = launcher.id;
     state.ball.launcherCooldown = 0.18;
+    recordShotPoint({ x: state.ball.x, y: state.ball.y });
     state.shots += 1;
     if (!state.shotEvents) {
       state.shotEvents = {
@@ -1073,6 +1115,10 @@
       state.successPulse.age += dt;
       if (state.successPulse.age >= state.successPulse.duration) state.successPulse = null;
     }
+    if (state.lastFailedShotPath) {
+      state.lastFailedShotPath.age += dt;
+      if (state.lastFailedShotPath.age >= state.lastFailedShotPath.duration) state.lastFailedShotPath = null;
+    }
     if (state.mode !== 'play') return;
     if (!state.ball || !state.ball.active) return;
 
@@ -1083,6 +1129,8 @@
     if (wallBounced && state.shotEvents) state.shotEvents.wallBounces += 1;
 
     if (wallResult.stuck) {
+      recordShotPoint({ x: state.ball.x, y: state.ball.y });
+      keepFailedShotPath();
       state.ball.active = false;
       setStatus('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
       playSound('impact');
@@ -1103,6 +1151,8 @@
     });
 
     if (stickyHit) {
+      recordShotPoint({ x: state.ball.x, y: state.ball.y });
+      keepFailedShotPath();
       state.ball.active = false;
       setStatus('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
       playSound('impact');
@@ -1114,6 +1164,7 @@
 
     const beforePortal = { x: state.ball.x, y: state.ball.y };
     const teleported = tryTeleport(state.ball, current.portals);
+    if (teleported) recordShotPoint(beforePortal);
     if (teleported && state.shotEvents) {
       const entry = current.portals.find((portal) => (
         Math.hypot(beforePortal.x - portal.x, beforePortal.y - portal.y) <= portal.radius + state.ball.radius
@@ -1135,6 +1186,7 @@
         state.selectedDeviceType = 'start';
       }
       if (state.shotEvents) state.shotEvents.launcherReturns += 1;
+      clearActiveShotPath();
       playSound('relay');
       setStatus(`${capturedLauncher.id} 接住了球。开关和门不会重置，调整方向后可以再次发射。`, 'var(--green)');
       syncControlsFromLauncher();
@@ -1152,18 +1204,21 @@
 
     state.ball.vx *= 0.998;
     state.ball.vy *= 0.998;
+    recordShotPoint({ x: state.ball.x, y: state.ball.y }, { break: teleported });
     state.ball.trail.push({ x: state.ball.x, y: state.ball.y });
     if (state.ball.trail.length > 44) state.ball.trail.shift();
 
     if (targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, teleported || Boolean(relayed))) {
       const mechanicResult = shotMeetsRequiredMechanics({ requiredMechanics: current.requiredMechanics, events: state.shotEvents });
       if (!mechanicResult.ok) {
+        keepFailedShotPath();
         state.ball.active = false;
         setStatus(`碰到 B 点了，但还缺少：${mechanicResult.missing.join('、')}。`, 'var(--red)');
         syncUi();
         return;
       }
       state.ball.active = false;
+      clearActiveShotPath();
       state.completed = true;
       spawnSuccessEffect();
       playSound('success');
@@ -1174,6 +1229,7 @@
     }
 
     if (Math.hypot(state.ball.vx, state.ball.vy) < 28) {
+      keepFailedShotPath();
       state.ball.active = false;
       setStatus('球停下了。调整方向再试一次。', 'var(--red)');
       syncUi();
@@ -1932,6 +1988,40 @@
     });
   }
 
+  function drawFailedShotPath() {
+    const trace = state.lastFailedShotPath;
+    if (!trace || !trace.points || trace.points.length < 2 || state.completed) return;
+    const fadeStart = trace.duration * 0.58;
+    const fadeProgress = trace.age <= fadeStart ? 0 : (trace.age - fadeStart) / (trace.duration - fadeStart);
+    const alpha = Math.max(0, 0.76 * (1 - fadeProgress));
+    if (alpha <= 0) return;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.strokeStyle = '#b8efff';
+    ctx.lineWidth = 2;
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = 'rgba(85, 167, 255, 0.38)';
+    ctx.shadowBlur = 5;
+    ctx.beginPath();
+    let needsMove = true;
+    trace.points.forEach((point, index) => {
+      if (point.break) {
+        needsMove = true;
+        return;
+      }
+      if (index === 0 || needsMove) {
+        ctx.moveTo(point.x, point.y);
+        needsMove = false;
+      } else {
+        ctx.lineTo(point.x, point.y);
+      }
+    });
+    ctx.stroke();
+    ctx.restore();
+  }
+
   function drawLaunchers() {
     state.launchers.forEach((launcher, index) => {
       const active = state.selectedDeviceType === 'start' && index === state.activeLauncherIndex;
@@ -1956,13 +2046,15 @@
   function drawBall() {
     if (!state.ball) return;
     ctx.save();
-    state.ball.trail.forEach((point, index) => {
-      const alpha = index / state.ball.trail.length;
-      ctx.fillStyle = `rgba(85, 167, 255, ${alpha * 0.34})`;
-      ctx.beginPath();
-      ctx.arc(point.x, point.y, 4 + alpha * 4, 0, Math.PI * 2);
-      ctx.fill();
-    });
+    if (state.ball.active) {
+      state.ball.trail.forEach((point, index) => {
+        const alpha = index / state.ball.trail.length;
+        ctx.fillStyle = `rgba(85, 167, 255, ${alpha * 0.34})`;
+        ctx.beginPath();
+        ctx.arc(point.x, point.y, 4 + alpha * 4, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
     ctx.fillStyle = '#f4f7fb';
     ctx.beginPath();
     ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
@@ -2015,6 +2107,7 @@
   function renderGame() {
     drawArena(level());
     drawPreview();
+    drawFailedShotPath();
     drawPortals();
     drawObstacles();
     drawSwitchDoorLinks();
@@ -2569,6 +2662,7 @@
     state.mode = 'editor';
     state.testLevel = null;
     state.ball = null;
+    clearShotPaths();
     state.completed = false;
     hideCompletionPrompt();
     ui.startScreen.classList.add('hidden');
