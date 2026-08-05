@@ -23,7 +23,7 @@
   const canvas = document.querySelector('#game');
   const ctx = canvas.getContext('2d');
   const customStorageKey = 'pinballSandboxCustomLevels.v1';
-  const overrideStorageKey = 'pinballSandboxLevelOverrides.v1';
+  const overrideStorageKey = 'pinballSandboxLevelOverrides.v2';
   const fixedLauncherPower = 700;
   canvas.tabIndex = 0;
 
@@ -149,6 +149,7 @@
     dragMode: null,
     dragOffset: { x: 0, y: 0 },
     lastTime: 0,
+    physicsAccumulator: 0,
     effects: [],
     successPulse: null,
     lastImpactSoundAt: 0,
@@ -1112,6 +1113,7 @@
       state.shotEvents = {
         wallBounces: 0,
         obstacleBounces: new Set(),
+        boostBounces: new Set(),
         teleports: new Set(),
         relayLaunches: new Set(),
         switchHits: new Set(),
@@ -1159,7 +1161,7 @@
     syncUi();
   }
 
-  function update(dt) {
+  function updateStep(dt) {
     const current = level();
     state.obstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
     state.effects.forEach((effect) => {
@@ -1204,6 +1206,7 @@
       const hitObstacle = resolveShapedObstacleBounce(state.ball, obstacle, obstacleRestitution(obstacle));
       if (hitObstacle && state.shotEvents) {
         state.shotEvents.obstacleBounces.add(obstacle.id);
+        if (obstacle.material === 'boost') state.shotEvents.boostBounces.add(obstacle.id);
         if (obstacle.path) state.shotEvents.hitMovingObstacle = true;
       }
       if (hitObstacle && obstacle.material === 'sticky') stickyHit = true;
@@ -1296,6 +1299,16 @@
       state.ball.active = false;
       setStatus('球停下了。调整方向再试一次。', 'var(--red)');
       syncUi();
+    }
+  }
+
+  function update(dt) {
+    const fixedStep = 1 / 60;
+    state.physicsAccumulator = Math.min(state.physicsAccumulator + Math.max(0, dt), 0.1);
+
+    while (state.physicsAccumulator >= fixedStep) {
+      updateStep(fixedStep);
+      state.physicsAccumulator -= fixedStep;
     }
   }
 

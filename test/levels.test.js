@@ -70,6 +70,7 @@ function traceDefaultLauncher(level) {
     solved: false,
     wallBounces: 0,
     obstacleBounces: new Set(),
+    boostBounces: new Set(),
     teleports: new Set(),
     relayLaunches: new Set(),
     switchHits: new Set(),
@@ -116,6 +117,7 @@ function traceDefaultLauncher(level) {
       obstacles.concat(activeDoorObstacles(doors)).forEach((obstacle, index) => {
         if (resolveShapedObstacleBounce(ball, obstacle, obstacle.material === 'boost' ? 1.22 : 0.94)) {
           trace.obstacleBounces.add(obstacle.id);
+          if (obstacle.material === 'boost') trace.boostBounces.add(obstacle.id);
           if (index < level.obstacles.length && level.obstacles[index].path) trace.hitMovingObstacle = true;
           if (obstacle.material === 'sticky') stickyHit = true;
         }
@@ -227,19 +229,25 @@ test('each level declares a focused player skill and useful hint', () => {
     assert.ok(Array.isArray(level.portals));
     assert.ok(Array.isArray(level.requiredMechanics));
     assert.ok(Array.isArray(level.relayLaunchers));
-    assert.ok(level.requiredMechanics.length > 0 || level.order === 1 || level.order === 4);
+    assert.ok(level.requiredMechanics.length > 0 || level.order <= 2);
   });
 });
 
 test('difficulty adds mechanics over time', () => {
   assert.equal(levels[0].portals.length, 0);
   assert.equal(levels[0].obstacles.length, 0);
-  assert.ok(levels.some((level) => level.portals.length >= 2));
-  assert.ok(levels.some((level) => level.obstacles.some((obstacle) => obstacle.path)));
-  assert.ok(levels.some((level) => (level.relayLaunchers || []).length > 0));
+  assert.ok(levels[3].obstacles.some((obstacle) => obstacle.shape === 'circle'));
+  assert.ok(levels[4].obstacles.some((obstacle) => obstacle.shape === 'triangle' && obstacle.material === 'boost'));
+  assert.ok(levels[5].portals.length >= 2);
+  assert.ok(levels[6].requiredMechanics.includes('portal'));
+  assert.ok(levels[6].requiredMechanics.includes('obstacleBounce'));
+  assert.ok(levels[7].relayLaunchers.length >= 1);
+  assert.ok(levels[8].requiredMechanics.includes('relay'));
+  assert.ok(levels[8].requiredMechanics.includes('boostBounce'));
   assert.ok(levels[9].portals.length >= 2);
   assert.ok(levels[9].obstacles.some((obstacle) => obstacle.path));
   assert.ok(levels[9].relayLaunchers.length >= 1);
+  assert.ok(levels[9].requiredMechanics.includes('boostBounce'));
   assert.ok(levels[10].switches.length >= 1);
   assert.ok(levels[10].doors.length >= 1);
   assert.ok(levels.slice(10, 15).every((level) => (level.switches || []).length >= 1));
@@ -255,6 +263,46 @@ test('difficulty adds mechanics over time', () => {
   assert.ok(levels[15].switches.length >= 1);
   assert.ok(levels[15].doors.length >= 1);
   assert.ok(levels[15].solutionShots.length >= 2);
+});
+
+test('authored bank surfaces are used while traps stay off the solution path', () => {
+  levels.forEach((level) => {
+    const trace = traceDefaultLauncher(level);
+    const bankIds = level.obstacles.filter((obstacle) => obstacle.role === 'bank').map((obstacle) => obstacle.id);
+    const trapIds = level.obstacles
+      .filter((obstacle) => obstacle.role === 'deadzone' || obstacle.role === 'decoy')
+      .map((obstacle) => obstacle.id);
+
+    bankIds.forEach((id) => {
+      assert.ok(trace.obstacleBounces.has(id), `${level.name} should use authored bank ${id}`);
+    });
+    trapIds.forEach((id) => {
+      assert.equal(trace.obstacleBounces.has(id), false, `${level.name} solution should avoid trap ${id}`);
+    });
+  });
+});
+
+test('moving shutters create real open and closed timing windows', () => {
+  levels.filter((level) => level.obstacles.some((obstacle) => obstacle.path)).forEach((level) => {
+    const defaultTrace = traceDefaultLauncher(level);
+    assert.equal(defaultTrace.solved, true, `${level.name} should have an authored open window`);
+
+    const phaseOffsets = [Math.PI / 2, Math.PI, Math.PI * 1.5];
+    const hasClosedWindow = phaseOffsets.some((offset) => {
+      const shiftedLevel = {
+        ...level,
+        obstacles: level.obstacles.map((obstacle) => (
+          obstacle.path ? { ...obstacle, phase: (obstacle.phase || 0) + offset } : { ...obstacle }
+        )),
+      };
+      return !traceDefaultLauncher(shiftedLevel).solved;
+    });
+
+    assert.equal(hasClosedWindow, true, `${level.name} moving shutter should be able to block the route`);
+    level.obstacles.filter((obstacle) => obstacle.path).forEach((obstacle) => {
+      assert.equal(obstacle.material, 'sticky', `${level.name}/${obstacle.id} should punish a mistimed shot`);
+    });
+  });
 });
 
 test('arena boundary rules discourage unintended outer-wall play', () => {
@@ -302,6 +350,9 @@ test('declared mechanics are actually used by the authored default solution', ()
     }
     if (level.requiredMechanics.includes('obstacleBounce')) {
       assert.ok(trace.obstacleBounces.size > 0, `${level.name} should bounce from an obstacle`);
+    }
+    if (level.requiredMechanics.includes('boostBounce')) {
+      assert.ok(trace.boostBounces.size > 0, `${level.name} should bounce from a boost wall`);
     }
     if (level.requiredMechanics.includes('relay')) {
       assert.ok(trace.relayLaunches.size > 0, `${level.name} should trigger a relay launcher`);

@@ -5,13 +5,14 @@ const { shotMeetsRequiredMechanics } = require('../src/mechanics');
 
 test('shot mechanic check accepts only mechanics the player actually used', () => {
   const result = shotMeetsRequiredMechanics({
-    requiredMechanics: ['wallBounce', 'portal', 'movingGate', 'relay', 'switchDoor', 'launcherReturn'],
+    requiredMechanics: ['wallBounce', 'portal', 'movingGate', 'boostBounce', 'relay', 'switchDoor', 'launcherReturn'],
     events: {
       wallBounces: 1,
       teleports: new Set(['blue']),
       relayLaunches: new Set(['R1']),
       switchHits: new Set(['red-switch']),
       obstacleBounces: new Set(),
+      boostBounces: new Set(['boost-wall']),
       launcherReturns: 1,
       hitMovingObstacle: true,
     },
@@ -23,18 +24,19 @@ test('shot mechanic check accepts only mechanics the player actually used', () =
 
 test('shot mechanic check reports missing active mechanics', () => {
   const result = shotMeetsRequiredMechanics({
-    requiredMechanics: ['wallBounce', 'portal', 'movingGate', 'relay', 'switchDoor', 'launcherReturn'],
+    requiredMechanics: ['wallBounce', 'portal', 'movingGate', 'boostBounce', 'relay', 'switchDoor', 'launcherReturn'],
     events: {
       wallBounces: 0,
       teleports: new Set(),
       relayLaunches: new Set(),
       switchHits: new Set(),
       obstacleBounces: new Set(),
+      boostBounces: new Set(),
       launcherReturns: 0,
       hitMovingObstacle: false,
     },
   });
 
   assert.equal(result.ok, false);
-  assert.deepEqual(result.missing, ['墙面反弹', '传送门', '移动障碍时机', '中继发射器', '开关门', '回到 A 点再发射']);
+  assert.deepEqual(result.missing, ['墙面反弹', '传送门', '移动障碍时机', '绿色弹力墙', '中继发射器', '开关门', '回到 A 点再发射']);
 });

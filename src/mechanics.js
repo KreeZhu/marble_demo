@@ -6,6 +6,7 @@
     portal: '传送门',
     movingGate: '移动障碍时机',
     obstacleBounce: '障碍反弹',
+    boostBounce: '绿色弹力墙',
     relay: '中继发射器',
     switchDoor: '开关门',
     launcherReturn: '回到 A 点再发射',
@@ -23,6 +24,8 @@
         missing.push(mechanicLabels.movingGate);
       } else if (mechanic === 'obstacleBounce' && events.obstacleBounces.size <= 0) {
         missing.push(mechanicLabels.obstacleBounce);
+      } else if (mechanic === 'boostBounce' && (!events.boostBounces || events.boostBounces.size <= 0)) {
+        missing.push(mechanicLabels.boostBounce);
       } else if (mechanic === 'relay' && events.relayLaunches.size <= 0) {
         missing.push(mechanicLabels.relay);
       } else if (mechanic === 'switchDoor' && events.switchHits.size <= 0) {
