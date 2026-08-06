@@ -105,7 +105,7 @@
     },
   };
   const arena = { ...mapSizes.small.arena };
-  const soundVolume = 1.9;
+  const soundVolume = 1.35;
   const launcherColor = '#41d692';
   const launcherGlow = 'rgba(65, 214, 146, 0.42)';
   const relayColor = launcherColor;
@@ -175,7 +175,16 @@
     },
   };
 
-  const audio = { context: null, unlocked: false };
+  const audio = {
+    context: null,
+    unlocked: false,
+    master: null,
+    compressor: null,
+    output: null,
+    reverb: null,
+    reverbGain: null,
+    noiseSeed: 0x3a7f29c1,
+  };
 
   function allLevels() {
     const official = officialLevels.map((item, index) => {
@@ -733,59 +742,196 @@
       const AudioContext = window.AudioContext || window.webkitAudioContext;
       if (!AudioContext) return null;
       audio.context = new AudioContext();
+      const context = audio.context;
+      audio.master = context.createGain();
+      audio.compressor = context.createDynamicsCompressor();
+      audio.output = context.createGain();
+      audio.master.gain.value = 0.88;
+      audio.output.gain.value = 1.35;
+      audio.compressor.threshold.value = -18;
+      audio.compressor.knee.value = 18;
+      audio.compressor.ratio.value = 5;
+      audio.compressor.attack.value = 0.004;
+      audio.compressor.release.value = 0.18;
+      audio.master.connect(audio.compressor);
+      audio.compressor.connect(audio.output);
+      audio.output.connect(context.destination);
+
+      if (context.createConvolver) {
+        const duration = 1.45;
+        const length = Math.floor(context.sampleRate * duration);
+        const impulse = context.createBuffer(2, length, context.sampleRate);
+        let seed = 0x71c3e29d;
+        for (let channel = 0; channel < impulse.numberOfChannels; channel += 1) {
+          const data = impulse.getChannelData(channel);
+          for (let i = 0; i < length; i += 1) {
+            seed = (seed * 1664525 + 1013904223) >>> 0;
+            const noise = seed / 0xffffffff * 2 - 1;
+            const envelope = Math.pow(1 - i / length, 2.8);
+            const earlyReflection = i < context.sampleRate * 0.08 ? 0.52 : 1;
+            data[i] = noise * envelope * earlyReflection * (channel === 0 ? 0.92 : 0.84);
+          }
+        }
+        audio.reverb = context.createConvolver();
+        audio.reverb.buffer = impulse;
+        audio.reverbGain = context.createGain();
+        audio.reverbGain.gain.value = 0.34;
+        audio.reverb.connect(audio.reverbGain);
+        audio.reverbGain.connect(audio.master);
+      }
     }
     if (audio.context.state === 'suspended') audio.context.resume();
     audio.unlocked = true;
     return audio.context;
   }
 
-  function playTone({ frequency, start = 0, duration = 0.08, type = 'sine', gain = 0.08, endFrequency }) {
+  function connectSoundVoice(context, sourceNode, { pan = 0, wet = 0.2 } = {}) {
+    let output = sourceNode;
+    if (context.createStereoPanner) {
+      const panner = context.createStereoPanner();
+      panner.pan.value = clamp(pan, -1, 1);
+      output.connect(panner);
+      output = panner;
+    }
+    output.connect(audio.master || context.destination);
+    if (audio.reverb && wet > 0) {
+      const send = context.createGain();
+      send.gain.value = clamp(wet, 0, 1);
+      output.connect(send);
+      send.connect(audio.reverb);
+    }
+  }
+
+  function playTone({
+    frequency,
+    start = 0,
+    duration = 0.08,
+    type = 'sine',
+    gain = 0.08,
+    endFrequency,
+    attack = 0.006,
+    filterFrequency = 12000,
+    endFilterFrequency,
+    filterType = 'lowpass',
+    resonance = 0.7,
+    detune = 0,
+    pan = 0,
+    wet = 0.2,
+  }) {
     const context = ensureAudio();
     if (!context) return;
     const now = context.currentTime + start;
+    const end = now + duration;
     const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
     const volume = context.createGain();
     oscillator.type = type;
     oscillator.frequency.setValueAtTime(frequency, now);
-    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(endFrequency, now + duration);
-    const outputGain = Math.min(gain * soundVolume, 0.24);
+    oscillator.detune.setValueAtTime(detune, now);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(1, endFrequency), end);
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFrequency, now);
+    filter.Q.value = resonance;
+    if (endFilterFrequency) filter.frequency.exponentialRampToValueAtTime(Math.max(20, endFilterFrequency), end);
+    const outputGain = Math.min(gain * soundVolume, 0.3);
     volume.gain.setValueAtTime(0.0001, now);
-    volume.gain.exponentialRampToValueAtTime(outputGain, now + 0.012);
-    volume.gain.exponentialRampToValueAtTime(0.0001, now + duration);
-    oscillator.connect(volume);
-    volume.connect(context.destination);
+    volume.gain.exponentialRampToValueAtTime(outputGain, now + Math.min(attack, duration * 0.35));
+    volume.gain.exponentialRampToValueAtTime(0.0001, end);
+    oscillator.connect(filter);
+    filter.connect(volume);
+    connectSoundVoice(context, volume, { pan, wet });
     oscillator.start(now);
-    oscillator.stop(now + duration + 0.02);
+    oscillator.stop(end + 0.03);
+  }
+
+  function playNoiseBurst({
+    start = 0,
+    duration = 0.06,
+    gain = 0.08,
+    filterFrequency = 1400,
+    endFilterFrequency,
+    filterType = 'bandpass',
+    resonance = 1.2,
+    pan = 0,
+    wet = 0.12,
+  } = {}) {
+    const context = ensureAudio();
+    if (!context) return;
+    const now = context.currentTime + start;
+    const end = now + duration;
+    const buffer = context.createBuffer(1, Math.max(1, Math.floor(context.sampleRate * duration)), context.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < data.length; i += 1) {
+      audio.noiseSeed = (audio.noiseSeed * 1664525 + 1013904223) >>> 0;
+      data[i] = (audio.noiseSeed / 0xffffffff * 2 - 1) * Math.pow(1 - i / data.length, 1.4);
+    }
+    const source = context.createBufferSource();
+    const filter = context.createBiquadFilter();
+    const volume = context.createGain();
+    source.buffer = buffer;
+    filter.type = filterType;
+    filter.frequency.setValueAtTime(filterFrequency, now);
+    filter.Q.value = resonance;
+    if (endFilterFrequency) filter.frequency.exponentialRampToValueAtTime(Math.max(20, endFilterFrequency), end);
+    volume.gain.setValueAtTime(Math.min(gain * soundVolume, 0.28), now);
+    volume.gain.exponentialRampToValueAtTime(0.0001, end);
+    source.connect(filter);
+    filter.connect(volume);
+    connectSoundVoice(context, volume, { pan, wet });
+    source.start(now);
+    source.stop(end + 0.02);
   }
 
   function playSound(name) {
     if (name === 'shoot') {
-      playTone({ frequency: 520, endFrequency: 260, duration: 0.055, type: 'square', gain: 0.055 });
-      playTone({ frequency: 210, endFrequency: 95, start: 0.006, duration: 0.18, type: 'triangle', gain: 0.115 });
-      playTone({ frequency: 760, endFrequency: 520, start: 0.035, duration: 0.08, type: 'sine', gain: 0.045 });
-      playTone({ frequency: 260, endFrequency: 130, start: 0.12, duration: 0.16, type: 'triangle', gain: 0.045 });
-      playTone({ frequency: 640, endFrequency: 390, start: 0.19, duration: 0.11, type: 'sine', gain: 0.03 });
+      playNoiseBurst({ duration: 0.045, gain: 0.18, filterFrequency: 1900, endFilterFrequency: 720, resonance: 1.6, pan: -0.12, wet: 0.08 });
+      playTone({ frequency: 760, endFrequency: 170, duration: 0.12, type: 'square', gain: 0.12, filterFrequency: 2200, endFilterFrequency: 620, resonance: 1.3, pan: -0.08, wet: 0.18 });
+      playTone({ frequency: 132, endFrequency: 58, start: 0.006, duration: 0.27, type: 'sine', gain: 0.19, filterFrequency: 320, pan: 0, wet: 0.12 });
+      playTone({ frequency: 510, endFrequency: 1180, start: 0.025, duration: 0.15, type: 'sawtooth', gain: 0.075, filterFrequency: 2800, endFilterFrequency: 5200, resonance: 1.8, pan: 0.15, wet: 0.34 });
+      playTone({ frequency: 1480, endFrequency: 930, start: 0.105, duration: 0.16, type: 'sine', gain: 0.055, pan: 0.28, wet: 0.58 });
+      playTone({ frequency: 620, endFrequency: 360, start: 0.25, duration: 0.18, type: 'triangle', gain: 0.04, pan: -0.24, wet: 0.72 });
+      playTone({ frequency: 620, endFrequency: 390, start: 0.42, duration: 0.16, type: 'sine', gain: 0.025, pan: 0.22, wet: 0.78 });
     } else if (name === 'impact') {
-      playTone({ frequency: 360, endFrequency: 210, duration: 0.05, type: 'square', gain: 0.05 });
-      playTone({ frequency: 520, endFrequency: 300, start: 0.018, duration: 0.06, type: 'triangle', gain: 0.035 });
+      playNoiseBurst({ duration: 0.035, gain: 0.07, filterFrequency: 1100, endFilterFrequency: 520, wet: 0.08 });
+      playTone({ frequency: 340, endFrequency: 190, duration: 0.065, type: 'square', gain: 0.055, filterFrequency: 1600, wet: 0.1 });
+      playTone({ frequency: 520, endFrequency: 290, start: 0.014, duration: 0.07, type: 'triangle', gain: 0.035, pan: 0.12, wet: 0.16 });
     } else if (name === 'boostImpact') {
-      playTone({ frequency: 440, endFrequency: 880, duration: 0.115, type: 'triangle', gain: 0.08 });
-      playTone({ frequency: 880, endFrequency: 1320, start: 0.03, duration: 0.085, type: 'sine', gain: 0.045 });
-      playTone({ frequency: 660, endFrequency: 990, start: 0.075, duration: 0.07, type: 'triangle', gain: 0.035 });
+      playNoiseBurst({ duration: 0.045, gain: 0.075, filterFrequency: 2400, endFilterFrequency: 5200, filterType: 'highpass', wet: 0.28 });
+      playTone({ frequency: 420, endFrequency: 920, duration: 0.14, type: 'triangle', gain: 0.09, pan: -0.16, wet: 0.34 });
+      playTone({ frequency: 840, endFrequency: 1480, start: 0.025, duration: 0.12, type: 'sine', gain: 0.052, pan: 0.2, wet: 0.5 });
+      playTone({ frequency: 660, endFrequency: 1080, start: 0.105, duration: 0.11, type: 'triangle', gain: 0.04, wet: 0.58 });
     } else if (name === 'stickyImpact') {
-      playTone({ frequency: 170, endFrequency: 58, duration: 0.22, type: 'sawtooth', gain: 0.075 });
-      playTone({ frequency: 92, endFrequency: 48, start: 0.055, duration: 0.19, type: 'sine', gain: 0.05 });
-      playTone({ frequency: 260, endFrequency: 120, start: 0.025, duration: 0.08, type: 'triangle', gain: 0.035 });
+      playNoiseBurst({ duration: 0.14, gain: 0.075, filterFrequency: 520, endFilterFrequency: 140, filterType: 'lowpass', resonance: 0.7, wet: 0.05 });
+      playTone({ frequency: 165, endFrequency: 46, duration: 0.28, type: 'sawtooth', gain: 0.085, filterFrequency: 560, endFilterFrequency: 120, wet: 0.08 });
+      playTone({ frequency: 88, endFrequency: 42, start: 0.04, duration: 0.24, type: 'sine', gain: 0.065, wet: 0.05 });
     } else if (name === 'portal') {
-      playTone({ frequency: 360, endFrequency: 760, duration: 0.13, type: 'sine', gain: 0.07 });
-      playTone({ frequency: 180, start: 0.035, endFrequency: 420, duration: 0.12, type: 'triangle', gain: 0.045 });
+      playTone({ frequency: 310, endFrequency: 1040, duration: 0.19, type: 'sine', gain: 0.075, pan: -0.38, wet: 0.68 });
+      playTone({ frequency: 170, start: 0.025, endFrequency: 520, duration: 0.17, type: 'triangle', gain: 0.052, pan: 0.35, wet: 0.62 });
+      playTone({ frequency: 1240, start: 0.11, endFrequency: 760, duration: 0.2, type: 'sine', gain: 0.035, wet: 0.8 });
     } else if (name === 'relay') {
-      playTone({ frequency: 260, endFrequency: 520, duration: 0.12, type: 'triangle', gain: 0.075 });
-      playTone({ frequency: 620, start: 0.06, duration: 0.08, type: 'sine', gain: 0.045 });
+      playNoiseBurst({ duration: 0.04, gain: 0.09, filterFrequency: 1650, endFilterFrequency: 820, wet: 0.12 });
+      playTone({ frequency: 240, endFrequency: 560, duration: 0.15, type: 'triangle', gain: 0.085, pan: -0.16, wet: 0.34 });
+      playTone({ frequency: 620, endFrequency: 980, start: 0.055, duration: 0.13, type: 'sine', gain: 0.05, pan: 0.16, wet: 0.5 });
+      playTone({ frequency: 980, endFrequency: 720, start: 0.17, duration: 0.14, type: 'sine', gain: 0.028, wet: 0.72 });
+    } else if (name === 'switch') {
+      playNoiseBurst({ duration: 0.035, gain: 0.11, filterFrequency: 2100, endFilterFrequency: 980, wet: 0.08 });
+      playTone({ frequency: 293.66, duration: 0.11, type: 'square', gain: 0.065, filterFrequency: 1800, pan: -0.12, wet: 0.24 });
+      playTone({ frequency: 880, start: 0.07, duration: 0.18, type: 'sine', gain: 0.07, pan: 0.16, wet: 0.48 });
+      playTone({ frequency: 1174.66, start: 0.13, duration: 0.2, type: 'sine', gain: 0.04, wet: 0.62 });
     } else if (name === 'success') {
-      playTone({ frequency: 523.25, duration: 0.13, type: 'sine', gain: 0.08 });
-      playTone({ frequency: 659.25, start: 0.09, duration: 0.13, type: 'sine', gain: 0.08 });
-      playTone({ frequency: 783.99, start: 0.18, duration: 0.22, type: 'triangle', gain: 0.095 });
+      playNoiseBurst({ duration: 0.24, gain: 0.055, filterFrequency: 4200, endFilterFrequency: 9800, filterType: 'highpass', resonance: 0.6, wet: 0.72 });
+      playTone({ frequency: 130.81, endFrequency: 65.41, duration: 0.48, type: 'sine', gain: 0.14, filterFrequency: 420, wet: 0.24 });
+      playTone({ frequency: 523.25, duration: 0.2, type: 'triangle', gain: 0.095, pan: -0.32, wet: 0.52 });
+      playTone({ frequency: 1046.5, duration: 0.22, type: 'sine', gain: 0.042, detune: 5, pan: -0.22, wet: 0.68 });
+      playTone({ frequency: 659.25, start: 0.12, duration: 0.22, type: 'triangle', gain: 0.095, pan: 0.22, wet: 0.54 });
+      playTone({ frequency: 1318.51, start: 0.12, duration: 0.24, type: 'sine', gain: 0.04, detune: -5, pan: 0.3, wet: 0.7 });
+      playTone({ frequency: 783.99, start: 0.24, duration: 0.26, type: 'triangle', gain: 0.1, pan: -0.12, wet: 0.58 });
+      playTone({ frequency: 1567.98, start: 0.24, duration: 0.28, type: 'sine', gain: 0.038, detune: 4, pan: 0.12, wet: 0.72 });
+      playTone({ frequency: 1046.5, start: 0.38, duration: 0.62, type: 'triangle', gain: 0.115, pan: 0.08, wet: 0.72 });
+      playTone({ frequency: 2093, start: 0.38, duration: 0.48, type: 'sine', gain: 0.046, detune: -4, pan: -0.08, wet: 0.82 });
+      playTone({ frequency: 261.63, start: 0.4, duration: 0.72, type: 'sine', gain: 0.075, filterFrequency: 900, wet: 0.42 });
+      playTone({ frequency: 783.99, start: 0.72, duration: 0.42, type: 'sine', gain: 0.032, pan: -0.28, wet: 0.86 });
+      playTone({ frequency: 1046.5, start: 0.88, duration: 0.48, type: 'sine', gain: 0.026, pan: 0.3, wet: 0.9 });
     }
   }
 
@@ -1259,7 +1405,7 @@
       return;
     }
 
-    if (switchHit) playSound('success');
+    if (switchHit) playSound('switch');
     else if (relayed) playSound('relay');
     else if (teleported) playSound('portal');
     else if ((wallBounced || obstacleBounced) && performance.now() - state.lastImpactSoundAt > 70) {
