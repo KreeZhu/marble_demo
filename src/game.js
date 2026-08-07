@@ -1198,7 +1198,7 @@
     ui.continueLevel.textContent = result.primaryLabel;
     ui.replayLevel.textContent = result.secondaryLabel;
     ui.continueLevel.className = 'primary next-level-action';
-    ui.replayLevel.className = 'menu-return-action';
+    ui.replayLevel.className = '';
     ui.continueLevel.classList.toggle('hidden', !result.hasNextLevel);
     ui.completeActions.classList.toggle('single-action', !result.hasNextLevel);
     ui.dialog.classList.remove('hidden');
