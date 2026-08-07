@@ -178,7 +178,7 @@ function inArenaCircle(circle) {
 }
 
 test('game has progressively numbered levels', () => {
-  assert.equal(levels.length, 16);
+  assert.equal(levels.length, 25);
   levels.forEach((level, index) => {
     assert.equal(level.order, index + 1);
   });
@@ -209,7 +209,7 @@ test('relay launchers only appear in later difficult levels', () => {
 
   levels.filter((level) => (level.relayLaunchers || []).length > 0).forEach((level) => {
     assert.ok((level.relayLaunchers || []).length >= 1, `${level.name} should introduce relay play`);
-    assert.ok(level.requiredMechanics.includes('relay'), `${level.name} should require using a relay`);
+    assert.ok(level.requiredMechanics.includes('relay'), `${level.name} should feature a relay in its authored route`);
     level.relayLaunchers.forEach((relay) => {
       assert.equal(relay.movable, false, `${level.name}/${relay.id} should keep a fixed play position`);
     });
@@ -242,27 +242,25 @@ test('difficulty adds mechanics over time', () => {
   assert.ok(levels[6].requiredMechanics.includes('portal'));
   assert.ok(levels[6].requiredMechanics.includes('obstacleBounce'));
   assert.ok(levels[7].relayLaunchers.length >= 1);
-  assert.ok(levels[8].requiredMechanics.includes('relay'));
+  assert.ok(levels[8].portals.length >= 2);
+  assert.ok(levels[8].obstacles.some((obstacle) => obstacle.path));
+  assert.ok(levels[8].relayLaunchers.length >= 1);
   assert.ok(levels[8].requiredMechanics.includes('boostBounce'));
-  assert.ok(levels[9].portals.length >= 2);
-  assert.ok(levels[9].obstacles.some((obstacle) => obstacle.path));
-  assert.ok(levels[9].relayLaunchers.length >= 1);
-  assert.ok(levels[9].requiredMechanics.includes('boostBounce'));
-  assert.ok(levels[10].switches.length >= 1);
-  assert.ok(levels[10].doors.length >= 1);
-  assert.ok(levels.slice(10, 15).every((level) => (level.switches || []).length >= 1));
-  assert.ok(levels.slice(10, 15).every((level) => (level.doors || []).length >= 1));
-  assert.ok(levels[11].requiredMechanics.includes('wallBounce'));
-  assert.ok(levels[12].obstacles.some((obstacle) => obstacle.path));
-  assert.ok(levels[13].portals.length >= 2);
-  assert.ok(levels[14].relayLaunchers.length >= 1);
-  assert.ok(levels[15].obstacles.some((obstacle) => obstacle.material === 'sticky'));
-  assert.ok(levels[15].requiredMechanics.includes('launcherReturn'));
-  assert.ok(levels[15].requiredMechanics.includes('relay'));
-  assert.ok(levels[15].requiredMechanics.includes('portal'));
-  assert.ok(levels[15].switches.length >= 1);
-  assert.ok(levels[15].doors.length >= 1);
-  assert.ok(levels[15].solutionShots.length >= 2);
+  assert.ok(levels[9].switches.length >= 1);
+  assert.ok(levels[9].doors.length >= 1);
+  assert.ok(levels.slice(9).every((level) => (level.switches || []).length >= 1));
+  assert.ok(levels.slice(9).every((level) => (level.doors || []).length >= 1));
+  assert.ok(levels[10].requiredMechanics.includes('wallBounce'));
+  assert.ok(levels[11].obstacles.some((obstacle) => obstacle.path));
+  assert.ok(levels[12].portals.length >= 2);
+  assert.ok(levels[13].relayLaunchers.length >= 1);
+  assert.ok(levels[24].obstacles.some((obstacle) => obstacle.material === 'sticky'));
+  assert.ok(levels[24].requiredMechanics.includes('launcherReturn'));
+  assert.ok(levels[24].requiredMechanics.includes('relay'));
+  assert.ok(levels[24].requiredMechanics.includes('portal'));
+  assert.ok(levels[24].switches.length >= 1);
+  assert.ok(levels[24].doors.length >= 1);
+  assert.ok(levels[24].solutionShots.length >= 2);
 });
 
 test('authored bank surfaces are used while traps stay off the solution path', () => {

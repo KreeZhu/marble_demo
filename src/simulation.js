@@ -15,6 +15,7 @@
       relayCooldown: 0,
       launcherCooldown: 0,
       originLauncherId: null,
+      continuesAttempt: false,
       trail: [],
     };
   }
@@ -147,19 +148,24 @@
   function tryLauncherCapture(ball, launchers = []) {
     if (ball.launcherCooldown > 0) return null;
 
-    const originLauncher = launchers.find((launcher) => (
-      launcher.id === ball.originLauncherId &&
+    const capturedLauncher = launchers.find((launcher) => (
       distance(ball, launcher) <= (launcher.radius || 22) + ball.radius
     ));
-    if (!originLauncher) return null;
+    if (!capturedLauncher) return null;
 
-    ball.x = originLauncher.x;
-    ball.y = originLauncher.y;
+    ball.x = capturedLauncher.x;
+    ball.y = capturedLauncher.y;
     ball.vx = 0;
     ball.vy = 0;
     ball.active = false;
+    ball.originLauncherId = capturedLauncher.id;
+    ball.continuesAttempt = true;
     ball.launcherCooldown = 0.18;
-    return originLauncher;
+    return capturedLauncher;
+  }
+
+  function shouldResetAttemptBeforeShot(ball) {
+    return Boolean(ball && !ball.active && !ball.continuesAttempt);
   }
 
   function resolveObstacleBounce(ball, rect, restitution = 1) {
@@ -434,6 +440,7 @@
     tryTeleport,
     tryRelayLaunch,
     tryLauncherCapture,
+    shouldResetAttemptBeforeShot,
     resolveObstacleBounce,
     resolveRotatedRectObstacleBounce,
     resolveCircleObstacleBounce,

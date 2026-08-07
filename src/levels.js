@@ -5,6 +5,7 @@
   const topBounceWalls = { ...stickyWalls, top: 'bounce' };
   const leftBounceWalls = { ...stickyWalls, left: 'bounce' };
 
+  // requiredMechanics only describes the authored reference route. It never gates victory.
   const levels = [
     {
       order: 1,
@@ -149,26 +150,6 @@
     },
     {
       order: 9,
-      name: '中继弹射',
-      focus: '中继接增弹墙',
-      hint: 'A 点只负责送入 R1。R1 要瞄准上方绿色墙，反弹后才有通往 B 点的路线。',
-      requiredMechanics: ['relay', 'boostBounce'],
-      arenaWalls: stickyWalls,
-      target: { x: 840, y: 430, radius: 18 },
-      launchers: [{ id: 'A1', x: 120, y: 480, angle: 0, power: 700 }],
-      solutionShots: [{ launcherId: 'A1', angle: -21.1 }],
-      solutionRelayAngles: { R1: -50.3 },
-      relayLaunchers: [
-        { id: 'R1', x: 350, y: 390, radius: 24, angle: 0, power: 700, movable: false, purpose: '把第一段转成射向高位绿色墙的陡角路线。' },
-      ],
-      obstacles: [
-        { id: 'relay-boost-bank', role: 'bank', material: 'boost', purpose: 'R1 的必经弹力墙，增强反弹并把球送回右下目标。', x: 494, y: 76, width: 152, height: 30 },
-        { id: 'low-shortcut-trap', role: 'deadzone', material: 'sticky', purpose: '封住 A 点直接瞄准目标的低位捷径。', x: 470, y: 406, width: 180, height: 86 },
-      ],
-      portals: [],
-    },
-    {
-      order: 10,
       name: '计时回旋',
       focus: '中继传送与动态折返',
       hint: '先进入 R1 和蓝门；传送后借绿色墙折返，并抓住黄色移动门让出的窗口。',
@@ -192,7 +173,7 @@
       ],
     },
     {
-      order: 11,
+      order: 10,
       name: '红门通电',
       focus: '开关门基础顺序',
       hint: '球先碰红色 OFF 开关，红门才会打开。沿同一条路线继续命中 B 点。',
@@ -211,7 +192,7 @@
       portals: [],
     },
     {
-      order: 12,
+      order: 11,
       name: '反弹开门',
       focus: '外墙反弹触发',
       hint: '只有上边界可以反弹。借上墙命中红开关，随后穿过已经打开的门。',
@@ -233,7 +214,7 @@
       portals: [],
     },
     {
-      order: 13,
+      order: 12,
       name: '红门节拍',
       focus: '状态保留与动态时机',
       hint: '第一发向左开门并回到 A 点；第二发等待移动砖块让出水平通道。',
@@ -258,7 +239,7 @@
       portals: [],
     },
     {
-      order: 14,
+      order: 13,
       name: '开门跃迁',
       focus: '开关接传送门',
       hint: '一条斜线要连续完成三件事：触发开关、穿过红门、进入蓝色传送门。',
@@ -283,7 +264,7 @@
       ],
     },
     {
-      order: 15,
+      order: 14,
       name: '双段解锁',
       focus: '回收蓄力与中继',
       hint: '第一发水平触发开关，再借绿色墙回到 A 点；第二发进入 R1 完成穿门。',
@@ -313,7 +294,7 @@
       portals: [],
     },
     {
-      order: 16,
+      order: 15,
       name: '回环终局',
       focus: '保留状态再发射',
       hint: '第一发向左开门并回到 A 点；第二发进 R1，等移动砖块让路后穿过传送门。',
@@ -345,6 +326,155 @@
       ],
     },
   ];
+
+  function cloneLevel(level) {
+    return JSON.parse(JSON.stringify(level));
+  }
+
+  function referenceLevel(baseName, overrides) {
+    const base = levels.find((level) => level.name === baseName);
+    return { ...cloneLevel(base), ...overrides };
+  }
+
+  const redCorridor = referenceLevel('红门通电', {
+    order: 16,
+    name: '红门窄廊',
+    focus: '窄通道开锁校准',
+    hint: '红色按钮和 B 点在同一条窄廊里。先通电，再保持水平路线穿过红门。',
+    obstacles: [
+      { id: 'corridor-top', role: 'blocker', material: 'sticky', purpose: '压缩红门上方空间，阻止高角度绕门。', x: 360, y: 36, width: 46, height: 220 },
+      { id: 'corridor-bottom', role: 'blocker', material: 'sticky', purpose: '压缩红门下方空间，阻止低角度绕门。', x: 360, y: 380, width: 46, height: 184 },
+    ],
+  });
+
+  const diagonalKey = referenceLevel('错位窄门', {
+    order: 17,
+    name: '斜线通行证',
+    focus: '斜线开锁连续性',
+    hint: '同一条斜线要依次穿过门缝、触发按钮、打开红门并命中 B 点。',
+    requiredMechanics: ['switchDoor'],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '放在正确斜线的前半段，为后方红门通电。', x: 250, y: 403, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '封住第二道门缝后的斜线，检验玩家是否先触发按钮。', x: 520, y: 252, width: 38, height: 100 },
+    ],
+  });
+
+  const curvedKey = referenceLevel('圆柱转角', {
+    order: 18,
+    name: '曲面钥匙',
+    focus: '开锁接曲面折射',
+    hint: '先沿陡斜线触发按钮并穿门，再擦过圆柱下缘，让球折向右下 B 点。',
+    requiredMechanics: ['switchDoor', 'obstacleBounce'],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '位于曲面入射线前段，先打开后方红门。', x: 250, y: 367, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '横跨圆柱前的入射线，确保按钮与反弹属于同一发。', x: 324, y: 274, width: 36, height: 104 },
+    ],
+  });
+
+  const portalPermit = referenceLevel('开门跃迁', {
+    order: 19,
+    name: '跃迁认证',
+    focus: '开锁传送精度',
+    hint: '红门只是第一道验证。开门后还要准确进入蓝门，出口会保留原来的斜线方向。',
+    target: { x: 842, y: 182, radius: 15 },
+    obstacles: [
+      ...cloneLevel(levels.find((level) => level.name === '开门跃迁')).obstacles,
+      { id: 'portal-angle-trap', role: 'decoy', shape: 'circle', material: 'sticky', purpose: '吸住偏向目标的直觉角度，提示蓝门才是有效路线。', x: 360, y: 300, radius: 28, width: 56, height: 56 },
+    ],
+  });
+
+  const rhythmReturn = referenceLevel('红门节拍', {
+    order: 20,
+    name: '节拍回收',
+    focus: '单球状态接力',
+    hint: '第一发向左开门并让同一颗球回到 A 点；只有被接住后再次发射，红门才会保持开启。',
+    obstacles: [
+      ...cloneLevel(levels.find((level) => level.name === '红门节拍')).obstacles,
+      { id: 'return-angle-trap', role: 'decoy', shape: 'circle', material: 'sticky', purpose: '惩罚第二发向右下方绕移动砖块的路线。', x: 350, y: 410, radius: 30, width: 60, height: 60 },
+    ],
+  });
+
+  const relayCircuit = referenceLevel('中继换向', {
+    order: 21,
+    name: '中继通电',
+    focus: '开锁接中继换向',
+    hint: 'A 点先沿低位斜线触发按钮并进入 R1；R1 再把同一颗球射过已经打开的红门。',
+    requiredMechanics: ['switchDoor', 'relay'],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '位于 A1 到 R1 的必经线上，为中继后的路径通电。', x: 230, y: 416, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '封住按钮后的中继入口，要求先完成开锁顺序。', x: 275, y: 374, width: 36, height: 58 },
+    ],
+  });
+
+  const doubleStage = referenceLevel('双段解锁', {
+    order: 22,
+    name: '双段伏线',
+    focus: '回收路线与中继选择',
+    hint: '第一发开门并借绿色墙回收；第二发瞄准 R1。右下的黄色圆形是错误捷径。',
+    obstacles: [
+      ...cloneLevel(levels.find((level) => level.name === '双段解锁')).obstacles,
+      { id: 'relay-low-trap', role: 'decoy', shape: 'circle', material: 'sticky', purpose: '吸住试图从红门下方直接绕行的第二发。', x: 665, y: 350, radius: 34, width: 68, height: 68 },
+    ],
+  });
+
+  const bentPass = referenceLevel('传送折角', {
+    order: 23,
+    name: '折角密钥',
+    focus: '开锁传送接曲面',
+    hint: '先在传送前开锁，穿门跃迁后再利用圆柱转向；三个动作必须由同一颗球连续完成。',
+    requiredMechanics: ['switchDoor', 'portal', 'obstacleBounce'],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '位于蓝门前的正确入射线上，为传送入口红门供电。', x: 220, y: 180, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '截住按钮后的蓝门入射线，保证开锁动作不可跳过。', x: 260, y: 150, width: 36, height: 92 },
+    ],
+  });
+
+  const timedCircuit = referenceLevel('计时回旋', {
+    order: 24,
+    name: '计时电路',
+    focus: '开锁中继与动态窗口',
+    hint: '起步先给红门通电，再进入 R1 和传送门；出口后的绿色折返还要避开移动砖块。',
+    requiredMechanics: ['switchDoor', 'relay', 'portal', 'boostBounce'],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '位于 A1 到 R1 的起步线上，为中继入口提前通电。', x: 205, y: 468, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '封住 R1 前方的低位斜线，要求起步先命中红色按钮。', x: 250, y: 426, width: 36, height: 82 },
+    ],
+  });
+
+  const neonLoop = referenceLevel('回环终局', {
+    order: 25,
+    name: '霓虹回环',
+    focus: '完整单球连锁挑战',
+    hint: '先开门并回收同一颗球，再完成中继、移动窗口和传送。球一旦停下，整条电路都会复位。',
+    target: { x: 842, y: 293, radius: 15 },
+    obstacles: [
+      ...cloneLevel(levels.find((level) => level.name === '回环终局')).obstacles,
+      { id: 'final-angle-trap', role: 'decoy', shape: 'circle', material: 'sticky', purpose: '吸住 R1 直接瞄向目标的错误角度，强化传送门的必要性。', x: 600, y: 350, radius: 34, width: 68, height: 68 },
+    ],
+  });
+
+  levels.push(
+    redCorridor,
+    diagonalKey,
+    curvedKey,
+    portalPermit,
+    rhythmReturn,
+    relayCircuit,
+    doubleStage,
+    bentPass,
+    timedCircuit,
+    neonLoop,
+  );
 
   const api = { levels };
 

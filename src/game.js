@@ -9,6 +9,7 @@
     tryTeleport,
     tryRelayLaunch,
     tryLauncherCapture,
+    shouldResetAttemptBeforeShot,
     resolveObstacleBounce,
     resolveShapedObstacleBounce,
     rotatedRectPoints,
@@ -17,13 +18,13 @@
     clamp,
   } = window.PinballSandbox;
   const { levels: officialLevels } = window.PinballLevels;
-  const { shotMeetsRequiredMechanics } = window.PinballMechanics;
   const { buildCompletionResult } = window.PinballProgression;
 
   const canvas = document.querySelector('#game');
   const ctx = canvas.getContext('2d');
   const customStorageKey = 'pinballSandboxCustomLevels.v1';
-  const overrideStorageKey = 'pinballSandboxLevelOverrides.v2';
+  const overrideStorageKey = 'pinballSandboxLevelOverrides.v3';
+  const previousOverrideStorageKey = 'pinballSandboxLevelOverrides.v2';
   const fixedLauncherPower = 700;
   canvas.tabIndex = 0;
 
@@ -224,17 +225,24 @@
 
   function loadLevelOverrides() {
     try {
-      const raw = window.localStorage.getItem(overrideStorageKey);
+      const currentRaw = window.localStorage.getItem(overrideStorageKey);
+      const previousRaw = window.localStorage.getItem(previousOverrideStorageKey);
+      const raw = currentRaw || previousRaw;
       if (!raw) return {};
       const parsed = JSON.parse(raw);
       if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
-      return Object.entries(parsed).reduce((overrides, [key, levelData]) => {
-        const index = Number(key);
+      const migrated = Object.entries(parsed).reduce((overrides, [key, levelData]) => {
+        const previousIndex = Number(key);
+        if (!currentRaw && previousIndex === 8) return overrides;
+        const index = !currentRaw && previousIndex > 8 ? previousIndex - 1 : previousIndex;
         if (!Number.isInteger(index) || !officialLevels[index]) return overrides;
+        if (String(levelData?.name || '').trim() === '取消') return overrides;
         const normalized = normalizeOfficialOverride(levelData, index);
         if (normalized) overrides[String(index)] = normalized;
         return overrides;
       }, {});
+      if (!currentRaw) window.localStorage.setItem(overrideStorageKey, JSON.stringify(migrated));
+      return migrated;
     } catch {
       return {};
     }
@@ -1251,6 +1259,19 @@
     syncUi();
   }
 
+  function resetAttemptRuntime() {
+    state.ball = null;
+    state.shots = 0;
+    state.completed = false;
+    state.effects = [];
+    state.successPulse = null;
+    state.obstacles = cloneLevelObstacles(level());
+    state.switches = cloneSwitches(level());
+    state.doors = cloneDoors(level());
+    state.shotEvents = null;
+    hideCompletionPrompt();
+  }
+
   function setLevel(index) {
     state.levelIndex = clamp(index, 0, allLevels().length - 1);
     state.activeLauncherIndex = 0;
@@ -1269,6 +1290,7 @@
     if (state.ball && state.ball.active) return;
     if (state.completed) return;
     ensureAudio();
+    if (shouldResetAttemptBeforeShot(state.ball)) resetAttemptRuntime();
     const launcher = shotLauncher();
     launcher.power = fixedLauncherPower;
     const vector = launcherVector(launcher);
@@ -1338,6 +1360,17 @@
     syncUi();
   }
 
+  function completeCurrentLevel() {
+    state.ball.active = false;
+    clearActiveShotPath();
+    state.completed = true;
+    spawnSuccessEffect();
+    playSound('success');
+    setStatus(`命中 B 点，用了 ${state.shots} 次发射。`, 'var(--green)');
+    showCompletionPrompt();
+    syncUi();
+  }
+
   function updateStep(dt) {
     const current = level();
     state.obstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
@@ -1361,11 +1394,16 @@
 
     const previous = { x: state.ball.x, y: state.ball.y };
     stepBall(state.ball, dt);
+    const targetHitDuringMovement = targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, false);
     const wallResult = resolveArenaWalls(state.ball, arena, arenaWallModes(current), 0.96);
     const wallBounced = wallResult.bounced;
     if (wallBounced && state.shotEvents) state.shotEvents.wallBounces += 1;
 
     if (wallResult.stuck) {
+      if (targetHitDuringMovement) {
+        completeCurrentLevel();
+        return;
+      }
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
       keepFailedShotPath();
       state.ball.active = false;
@@ -1393,6 +1431,10 @@
     });
 
     if (stickyHit) {
+      if (targetHitDuringMovement) {
+        completeCurrentLevel();
+        return;
+      }
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
       keepFailedShotPath();
       state.ball.active = false;
@@ -1418,6 +1460,11 @@
     if (relayed && state.shotEvents) {
       state.shotEvents.relayLaunches.add(relayed.id);
       state.effects.push({ x: relayed.x, y: relayed.y, vx: 0, vy: 0, age: 0, duration: 0.42, radius: 18, color: relayColor });
+    }
+
+    if (targetHitDuringMovement || targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, teleported || Boolean(relayed))) {
+      completeCurrentLevel();
+      return;
     }
 
     const capturedLauncher = tryLauncherCapture(state.ball, state.launchers);
@@ -1451,30 +1498,10 @@
     state.ball.trail.push({ x: state.ball.x, y: state.ball.y });
     if (state.ball.trail.length > 44) state.ball.trail.shift();
 
-    if (targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, teleported || Boolean(relayed))) {
-      const mechanicResult = shotMeetsRequiredMechanics({ requiredMechanics: current.requiredMechanics, events: state.shotEvents });
-      if (!mechanicResult.ok) {
-        keepFailedShotPath();
-        state.ball.active = false;
-        setStatus(`碰到 B 点了，但还缺少：${mechanicResult.missing.join('、')}。`, 'var(--red)');
-        syncUi();
-        return;
-      }
-      state.ball.active = false;
-      clearActiveShotPath();
-      state.completed = true;
-      spawnSuccessEffect();
-      playSound('success');
-      setStatus(`命中 B 点，用了 ${state.shots} 次发射。`, 'var(--green)');
-      showCompletionPrompt();
-      syncUi();
-      return;
-    }
-
     if (Math.hypot(state.ball.vx, state.ball.vy) < 28) {
       keepFailedShotPath();
       state.ball.active = false;
-      setStatus('球停下了。调整方向再试一次。', 'var(--red)');
+      setStatus('球停下了。本次尝试结束，下一次发射会重置开关、门和移动机关。', 'var(--red)');
       syncUi();
     }
   }
