@@ -60,6 +60,7 @@
     dialog: document.querySelector('#levelCompleteDialog'),
     completeTitle: document.querySelector('#completeTitle'),
     completeBody: document.querySelector('#completeBody'),
+    completeActions: document.querySelector('.completion-actions'),
     continueLevel: document.querySelector('#continueLevel'),
     replayLevel: document.querySelector('#replayLevel'),
     unsavedEditorDialog: document.querySelector('#unsavedEditorDialog'),
@@ -785,11 +786,20 @@
     return audio.context;
   }
 
-  function connectSoundVoice(context, sourceNode, { pan = 0, wet = 0.2 } = {}) {
+  function connectSoundVoice(context, sourceNode, {
+    pan = 0,
+    endPan,
+    startTime = context.currentTime,
+    duration = 0,
+    wet = 0.2,
+  } = {}) {
     let output = sourceNode;
     if (context.createStereoPanner) {
       const panner = context.createStereoPanner();
-      panner.pan.value = clamp(pan, -1, 1);
+      panner.pan.setValueAtTime(clamp(pan, -1, 1), startTime);
+      if (Number.isFinite(endPan) && duration > 0) {
+        panner.pan.linearRampToValueAtTime(clamp(endPan, -1, 1), startTime + duration);
+      }
       output.connect(panner);
       output = panner;
     }
@@ -816,6 +826,7 @@
     resonance = 0.7,
     detune = 0,
     pan = 0,
+    endPan,
     wet = 0.2,
   }) {
     const context = ensureAudio();
@@ -839,7 +850,7 @@
     volume.gain.exponentialRampToValueAtTime(0.0001, end);
     oscillator.connect(filter);
     filter.connect(volume);
-    connectSoundVoice(context, volume, { pan, wet });
+    connectSoundVoice(context, volume, { pan, endPan, startTime: now, duration, wet });
     oscillator.start(now);
     oscillator.stop(end + 0.03);
   }
@@ -852,7 +863,9 @@
     endFilterFrequency,
     filterType = 'bandpass',
     resonance = 1.2,
+    attack = 0,
     pan = 0,
+    endPan,
     wet = 0.12,
   } = {}) {
     const context = ensureAudio();
@@ -873,11 +886,17 @@
     filter.frequency.setValueAtTime(filterFrequency, now);
     filter.Q.value = resonance;
     if (endFilterFrequency) filter.frequency.exponentialRampToValueAtTime(Math.max(20, endFilterFrequency), end);
-    volume.gain.setValueAtTime(Math.min(gain * soundVolume, 0.28), now);
+    const outputGain = Math.min(gain * soundVolume, 0.28);
+    if (attack > 0) {
+      volume.gain.setValueAtTime(0.0001, now);
+      volume.gain.exponentialRampToValueAtTime(outputGain, now + Math.min(attack, duration * 0.45));
+    } else {
+      volume.gain.setValueAtTime(outputGain, now);
+    }
     volume.gain.exponentialRampToValueAtTime(0.0001, end);
     source.connect(filter);
     filter.connect(volume);
-    connectSoundVoice(context, volume, { pan, wet });
+    connectSoundVoice(context, volume, { pan, endPan, startTime: now, duration, wet });
     source.start(now);
     source.stop(end + 0.02);
   }
@@ -888,6 +907,9 @@
       playTone({ frequency: 760, endFrequency: 170, duration: 0.12, type: 'square', gain: 0.12, filterFrequency: 2200, endFilterFrequency: 620, resonance: 1.3, pan: -0.08, wet: 0.18 });
       playTone({ frequency: 132, endFrequency: 58, start: 0.006, duration: 0.27, type: 'sine', gain: 0.19, filterFrequency: 320, pan: 0, wet: 0.12 });
       playTone({ frequency: 510, endFrequency: 1180, start: 0.025, duration: 0.15, type: 'sawtooth', gain: 0.075, filterFrequency: 2800, endFilterFrequency: 5200, resonance: 1.8, pan: 0.15, wet: 0.34 });
+      playNoiseBurst({ start: 0.035, duration: 0.34, gain: 0.14, filterFrequency: 6200, endFilterFrequency: 950, filterType: 'bandpass', resonance: 0.55, attack: 0.055, pan: -0.85, endPan: 0.9, wet: 0.16 });
+      playNoiseBurst({ start: 0.06, duration: 0.22, gain: 0.075, filterFrequency: 2400, endFilterFrequency: 7800, filterType: 'highpass', resonance: 0.4, attack: 0.035, pan: -0.65, endPan: 0.75, wet: 0.12 });
+      playTone({ frequency: 1850, endFrequency: 420, start: 0.055, duration: 0.28, type: 'sine', gain: 0.035, filterFrequency: 7200, pan: -0.72, endPan: 0.78, wet: 0.3 });
       playTone({ frequency: 1480, endFrequency: 930, start: 0.105, duration: 0.16, type: 'sine', gain: 0.055, pan: 0.28, wet: 0.58 });
       playTone({ frequency: 620, endFrequency: 360, start: 0.25, duration: 0.18, type: 'triangle', gain: 0.04, pan: -0.24, wet: 0.72 });
       playTone({ frequency: 620, endFrequency: 390, start: 0.42, duration: 0.16, type: 'sine', gain: 0.025, pan: 0.22, wet: 0.78 });
@@ -1156,6 +1178,10 @@
       ui.completeBody.textContent = state.completionResult.body;
       ui.continueLevel.textContent = '回到编辑器继续修改';
       ui.replayLevel.textContent = '保存并返回菜单';
+      ui.continueLevel.className = 'primary';
+      ui.replayLevel.className = '';
+      ui.continueLevel.classList.remove('hidden');
+      ui.completeActions.classList.remove('single-action');
       ui.dialog.classList.remove('hidden');
       ui.continueLevel.focus();
       return;
@@ -1171,8 +1197,13 @@
     ui.completeBody.textContent = result.body;
     ui.continueLevel.textContent = result.primaryLabel;
     ui.replayLevel.textContent = result.secondaryLabel;
+    ui.continueLevel.className = 'primary next-level-action';
+    ui.replayLevel.className = 'menu-return-action';
+    ui.continueLevel.classList.toggle('hidden', !result.hasNextLevel);
+    ui.completeActions.classList.toggle('single-action', !result.hasNextLevel);
     ui.dialog.classList.remove('hidden');
-    ui.continueLevel.focus();
+    if (result.hasNextLevel) ui.continueLevel.focus();
+    else ui.replayLevel.focus();
     syncLevelMenu();
   }
 
@@ -2956,12 +2987,13 @@
   ui.continueLevel.addEventListener('click', () => {
     ensureAudio();
     if (state.testLevel?.editorTest) returnToEditorFromTest();
+    else if (state.completionResult?.hasNextLevel) startLevel(state.levelIndex + 1);
     else openLevelMenu();
   });
   ui.replayLevel.addEventListener('click', () => {
     ensureAudio();
     if (state.testLevel?.editorTest) saveEditedLevel({ exitAfterSave: true });
-    else resetLevel();
+    else openLevelMenu();
   });
   ui.angle.addEventListener('input', () => {
     if (state.mode !== 'play') return;

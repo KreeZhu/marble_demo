@@ -844,6 +844,30 @@ button:disabled {
   font-weight: 800;
 }
 
+.modal-actions .next-level-action {
+  border-color: rgba(82, 255, 181, 0.92);
+  background: #41d692;
+  color: #06150e;
+  box-shadow:
+    0 0 22px rgba(65, 214, 146, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.28);
+  font-weight: 800;
+}
+
+.modal-actions .menu-return-action {
+  border-color: rgba(202, 142, 91, 0.78);
+  background: #74462c;
+  color: #fff5eb;
+  box-shadow:
+    0 0 16px rgba(146, 84, 43, 0.22),
+    inset 0 1px 0 rgba(255, 232, 210, 0.15);
+  font-weight: 800;
+}
+
+.completion-actions.single-action {
+  grid-template-columns: 1fr;
+}
+
 .modal-actions .danger-action {
   border-color: rgba(255, 111, 97, 0.72);
   background: #ff6f61;
