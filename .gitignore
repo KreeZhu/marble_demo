@@ -5,3 +5,4 @@ playtest-*.png
 docs/_render_*/
 docs/gdd_v1_render.docx
 docs/gdd_v1_render.pdf
+docs/*_GoogleDocs.docx

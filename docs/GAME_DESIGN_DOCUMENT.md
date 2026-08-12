@@ -4,6 +4,7 @@
 **对应游戏版本：** v0.1.0 当前开发版  
 **规则基线日期：** 2026-08-12  
 **文档用途：** 统一策划、开发、美术、音效和测试人员对当前游戏的理解，并作为后续逐条检查规则的基准。
+**在线编辑版：** [Google 文档](https://docs.google.com/document/d/1XyUlNziW33uy8o0GoU3LKci7qbUbTkiJHrhe92RRCog/edit?usp=drivesdk)
 
 ---
 

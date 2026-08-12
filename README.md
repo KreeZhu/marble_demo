@@ -52,6 +52,7 @@ http://127.0.0.1:8000/index.html
 
 ## 游戏设计文档
 
+- [Google 文档在线编辑版](https://docs.google.com/document/d/1XyUlNziW33uy8o0GoU3LKci7qbUbTkiJHrhe92RRCog/edit?usp=drivesdk)
 - [Markdown 规则源文档](docs/GAME_DESIGN_DOCUMENT.md)
 - [Word 分享版](docs/弹珠_游戏设计文档_v1.0.docx)
 - [PDF 阅读版](docs/弹珠_游戏设计文档_v1.0.pdf)
