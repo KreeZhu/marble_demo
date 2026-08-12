@@ -12,7 +12,6 @@
       radius,
       active: false,
       portalCooldown: 0,
-      relayCooldown: 0,
       launcherCooldown: 0,
       originLauncherId: null,
       continuesAttempt: false,
@@ -32,7 +31,6 @@
     ball.x += ball.vx * dt;
     ball.y += ball.vy * dt;
     ball.portalCooldown = Math.max(0, ball.portalCooldown - dt);
-    ball.relayCooldown = Math.max(0, ball.relayCooldown - dt);
     ball.launcherCooldown = Math.max(0, ball.launcherCooldown - dt);
   }
 
@@ -125,24 +123,6 @@
     ball.y = exit.y + Math.sin(exitAngle) * offset;
     ball.portalCooldown = 0.35;
     return true;
-  }
-
-  function tryRelayLaunch(ball, relayLaunchers = []) {
-    if (ball.relayCooldown > 0) return null;
-
-    const relay = relayLaunchers.find((launcher) => (
-      distance(ball, launcher) <= (launcher.radius || 22) + ball.radius
-    ));
-    if (!relay) return null;
-
-    const radians = relay.angle * Math.PI / 180;
-    const offset = (relay.radius || 22) + ball.radius + 2;
-    ball.x = relay.x + Math.cos(radians) * offset;
-    ball.y = relay.y + Math.sin(radians) * offset;
-    ball.vx = Math.cos(radians) * relay.power;
-    ball.vy = Math.sin(radians) * relay.power;
-    ball.relayCooldown = 0.45;
-    return relay;
   }
 
   function tryLauncherCapture(ball, launchers = []) {
@@ -438,7 +418,6 @@
     segmentCircleHit,
     targetHitThisFrame,
     tryTeleport,
-    tryRelayLaunch,
     tryLauncherCapture,
     shouldResetAttemptBeforeShot,
     resolveObstacleBounce,

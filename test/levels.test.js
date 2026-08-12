@@ -8,7 +8,6 @@ const {
   resolveArenaWalls,
   targetHitThisFrame,
   tryTeleport,
-  tryRelayLaunch,
   tryLauncherCapture,
   resolveObstacleBounce,
   resolveShapedObstacleBounce,
@@ -135,8 +134,23 @@ function traceDefaultLauncher(level) {
         if (entry) trace.teleports.add(entry.id);
       }
 
-      const relayed = tryRelayLaunch(ball, relays);
-      if (relayed) trace.relayLaunches.add(relayed.id);
+      if (targetHitThisFrame(previous, ball, level.target, ball.radius, teleported)) {
+        trace.solved = true;
+        return trace;
+      }
+
+      const capturedRelay = tryLauncherCapture(ball, relays);
+      if (capturedRelay) {
+        trace.relayLaunches.add(capturedRelay.id);
+        const relayAngle = level.solutionRelayAngles?.[capturedRelay.id] ?? capturedRelay.angle;
+        const relayRadians = relayAngle * Math.PI / 180;
+        ball.vx = Math.cos(relayRadians) * fixedLauncherPower;
+        ball.vy = Math.sin(relayRadians) * fixedLauncherPower;
+        ball.active = true;
+        ball.originLauncherId = capturedRelay.id;
+        ball.continuesAttempt = false;
+        ball.launcherCooldown = 0.18;
+      }
 
       const capturedLauncher = tryLauncherCapture(ball, level.launchers);
       if (capturedLauncher) {
@@ -149,11 +163,6 @@ function traceDefaultLauncher(level) {
       ball.vx *= 0.998;
       ball.vy *= 0.998;
       trace.frames += 1;
-
-      if (targetHitThisFrame(previous, ball, level.target, ball.radius, teleported || Boolean(relayed))) {
-        trace.solved = true;
-        return trace;
-      }
 
       if (Math.hypot(ball.vx, ball.vy) < 28) {
         return trace;

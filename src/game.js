@@ -7,7 +7,6 @@
     resolveArenaWalls,
     targetHitThisFrame,
     tryTeleport,
-    tryRelayLaunch,
     tryLauncherCapture,
     shouldResetAttemptBeforeShot,
     resolveObstacleBounce,
@@ -112,6 +111,8 @@
   const launcherGlow = 'rgba(65, 214, 146, 0.42)';
   const relayColor = launcherColor;
   const relayGlow = launcherGlow;
+  const emptyLauncherColor = '#9b7cff';
+  const emptyLauncherGlow = 'rgba(155, 124, 255, 0.36)';
   const stickyArenaWalls = { top: 'sticky', right: 'sticky', bottom: 'sticky', left: 'sticky' };
   const art = {
     metal: '#596977',
@@ -369,7 +370,7 @@
         angle: Number.isFinite(relay.angle) ? relay.angle : 0,
         power: fixedLauncherPower,
         movable: true,
-        purpose: relay.purpose || '自定义中继发射器。',
+        purpose: relay.purpose || '自定义空发射器；接到球后可手动瞄准并发射。',
       })),
       obstacles: (level.obstacles || []).map((obstacle, obstacleIndex) => ({
         id: obstacle.id || `wall-${obstacleIndex + 1}`,
@@ -564,15 +565,51 @@
     return state.launchers[state.activeLauncherIndex] || state.launchers[0];
   }
 
-  function shotLauncher() {
-    return activeLauncher();
-  }
-
   function selectedLauncher() {
     if (state.selectedDeviceType === 'relay' && state.relayLaunchers[state.selectedRelayIndex]) {
       return state.relayLaunchers[state.selectedRelayIndex];
     }
     return activeLauncher();
+  }
+
+  function shotLauncher() {
+    return selectedLauncher();
+  }
+
+  function attemptNeedsRestart() {
+    return Boolean(state.ball && !state.ball.active && !state.ball.continuesAttempt && !state.completed);
+  }
+
+  function launcherIsLoaded(type, index) {
+    if (state.completed || (state.ball && state.ball.active) || attemptNeedsRestart()) return false;
+    if (!state.ball) return type === 'start' && index === 0;
+    if (!state.ball.continuesAttempt) return false;
+    if (type === 'relay') return state.selectedDeviceType === 'relay' && state.selectedRelayIndex === index;
+    return state.selectedDeviceType === 'start' && state.activeLauncherIndex === index;
+  }
+
+  function launcherCanAim(type, index) {
+    if (launcherIsLoaded(type, index)) return true;
+    return attemptNeedsRestart() && type === 'start' && index === 0;
+  }
+
+  function selectedLauncherCanShoot() {
+    const index = state.selectedDeviceType === 'relay' ? state.selectedRelayIndex : state.activeLauncherIndex;
+    return launcherCanAim(state.selectedDeviceType, index);
+  }
+
+  function prepareStartLauncherForRestart() {
+    state.selectedDeviceType = 'start';
+    state.activeLauncherIndex = 0;
+    state.selectedRelayIndex = 0;
+    const launcher = state.launchers[0];
+    if (state.ball && launcher) {
+      state.ball.x = launcher.x;
+      state.ball.y = launcher.y;
+      state.ball.vx = 0;
+      state.ball.vy = 0;
+    }
+    syncControlsFromLauncher();
   }
 
   function setStatus(text, tone) {
@@ -597,7 +634,7 @@
       levelData,
       state.obstacles,
       state.relayLaunchers,
-      { includeRelays: true },
+      { switches: state.switches, doors: state.doors },
     ).map((point) => ({ ...point }));
   }
 
@@ -1011,6 +1048,7 @@
     const current = level();
     const launcher = selectedLauncher();
     const levels = allLevels();
+    const canControlLauncher = selectedLauncherCanShoot();
     ui.levelNumber.textContent = String(state.levelIndex + 1);
     ui.levelName.textContent = current.name;
     ui.levelFocus.textContent = current.focus;
@@ -1023,33 +1061,42 @@
     launcher.power = fixedLauncherPower;
     ui.powerValue.textContent = String(fixedLauncherPower);
     ui.previewLengthValue.textContent = String(Math.round(state.previewDistance));
-    ui.power.disabled = state.selectedDeviceType === 'relay';
+    ui.angle.disabled = !canControlLauncher;
+    ui.power.disabled = true;
     ui.prevLevel.disabled = Boolean(state.testLevel) || state.levelIndex === 0;
     ui.nextLevel.disabled = Boolean(state.testLevel) || state.levelIndex === levels.length - 1;
-    ui.shoot.disabled = state.mode !== 'play' || Boolean(state.ball && state.ball.active) || state.completed;
+    ui.shoot.disabled = state.mode !== 'play' || Boolean(state.ball && state.ball.active) || state.completed || !canControlLauncher;
+    ui.shoot.textContent = attemptNeedsRestart() ? `从 ${state.launchers[0]?.id || 'A1'} 重开` : '发射 Space';
 
     ui.launcherButtons.innerHTML = '';
     state.launchers.forEach((item, index) => {
+      const loaded = launcherIsLoaded('start', index);
+      const restart = attemptNeedsRestart() && index === 0;
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = item.id;
-      button.className = state.selectedDeviceType === 'start' && index === state.activeLauncherIndex ? 'active' : '';
+      button.textContent = `${item.id} · ${loaded ? '有球' : restart ? '重开' : '空'}`;
+      button.className = loaded || restart ? 'active' : '';
+      button.disabled = !loaded && !restart;
       button.addEventListener('click', () => {
         if (state.ball && state.ball.active) return;
         selectStartLauncher(index);
-        setStatus(`${item.id} 已选中。拖动画布调整方向，力度固定为 700。`, 'var(--blue)');
+        setStatus(restart
+          ? `${item.id} 将开始新尝试。发射时会重置开关、门和移动机关。`
+          : `${item.id} 内有球。调整方向后再次发射，力度固定为 700。`, restart ? 'var(--amber)' : 'var(--green)');
       });
       ui.launcherButtons.append(button);
     });
     state.relayLaunchers.forEach((item, index) => {
+      const loaded = launcherIsLoaded('relay', index);
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = item.id;
-      button.className = `relay ${state.selectedDeviceType === 'relay' && index === state.selectedRelayIndex ? 'active' : ''}`;
+      button.textContent = `${item.id} · ${loaded ? '有球' : '空'}`;
+      button.className = `relay ${loaded ? 'active' : ''}`;
+      button.disabled = !loaded;
       button.addEventListener('click', () => {
         if (state.ball && state.ball.active) return;
         selectRelayLauncher(index);
-        setStatus(`${item.id} 已选中。它的位置固定，只能调整方向，力度固定为 700。`, 'var(--amber)');
+        setStatus(`${item.id} 内有球。重新瞄准后再次发射，位置固定，力度固定为 700。`, 'var(--green)');
       });
       ui.launcherButtons.append(button);
     });
@@ -1248,10 +1295,8 @@
     state.switches = cloneSwitches(level());
     state.doors = cloneDoors(level());
     state.activeLauncherIndex = 0;
-    if (state.selectedDeviceType === 'relay' && !state.relayLaunchers[state.selectedRelayIndex]) {
-      state.selectedDeviceType = 'start';
-      state.selectedRelayIndex = 0;
-    }
+    state.selectedDeviceType = 'start';
+    state.selectedRelayIndex = 0;
     state.shotEvents = null;
     hideCompletionPrompt();
     syncControlsFromLauncher();
@@ -1268,6 +1313,9 @@
     state.obstacles = cloneLevelObstacles(level());
     state.switches = cloneSwitches(level());
     state.doors = cloneDoors(level());
+    state.selectedDeviceType = 'start';
+    state.activeLauncherIndex = 0;
+    state.selectedRelayIndex = 0;
     state.shotEvents = null;
     hideCompletionPrompt();
   }
@@ -1291,7 +1339,9 @@
     if (state.completed) return;
     ensureAudio();
     if (shouldResetAttemptBeforeShot(state.ball)) resetAttemptRuntime();
+    if (!selectedLauncherCanShoot()) return;
     const launcher = shotLauncher();
+    const firedFromRelay = state.selectedDeviceType === 'relay';
     launcher.power = fixedLauncherPower;
     const vector = launcherVector(launcher);
     clearFailedShotPath();
@@ -1320,8 +1370,9 @@
         hitMovingObstacle: false,
       };
     }
+    if (firedFromRelay) state.shotEvents.relayLaunches.add(launcher.id);
     playSound('shoot');
-    setStatus('飞行中。观察短预线之外的真实反弹，再微调下一次发射。', 'var(--amber)');
+    setStatus(`${launcher.id} 已发射。球进入任意发射器后会停下，等待你重新瞄准。`, 'var(--amber)');
     syncUi();
   }
 
@@ -1407,6 +1458,7 @@
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
       keepFailedShotPath();
       state.ball.active = false;
+      prepareStartLauncherForRestart();
       setStatus('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
       playSound('stickyImpact');
       syncUi();
@@ -1438,6 +1490,7 @@
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
       keepFailedShotPath();
       state.ball.active = false;
+      prepareStartLauncherForRestart();
       setStatus('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
       playSound('stickyImpact');
       syncUi();
@@ -1456,35 +1509,37 @@
       if (entry) state.shotEvents.teleports.add(entry.id);
     }
 
-    const relayed = tryRelayLaunch(state.ball, state.relayLaunchers);
-    if (relayed && state.shotEvents) {
-      state.shotEvents.relayLaunches.add(relayed.id);
-      state.effects.push({ x: relayed.x, y: relayed.y, vx: 0, vy: 0, age: 0, duration: 0.42, radius: 18, color: relayColor });
-    }
-
-    if (targetHitDuringMovement || targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, teleported || Boolean(relayed))) {
+    if (targetHitDuringMovement || targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, teleported)) {
       completeCurrentLevel();
       return;
     }
 
-    const capturedLauncher = tryLauncherCapture(state.ball, state.launchers);
+    let capturedType = 'start';
+    let capturedLauncher = tryLauncherCapture(state.ball, state.launchers);
+    if (!capturedLauncher) {
+      capturedType = 'relay';
+      capturedLauncher = tryLauncherCapture(state.ball, state.relayLaunchers);
+    }
     if (capturedLauncher) {
-      const capturedIndex = state.launchers.findIndex((launcher) => launcher.id === capturedLauncher.id);
-      if (capturedIndex >= 0) {
+      if (capturedType === 'start') {
+        const capturedIndex = state.launchers.findIndex((launcher) => launcher.id === capturedLauncher.id);
         state.activeLauncherIndex = capturedIndex;
         state.selectedDeviceType = 'start';
+        if (state.shotEvents) state.shotEvents.launcherReturns += 1;
+      } else {
+        state.selectedRelayIndex = state.relayLaunchers.findIndex((launcher) => launcher.id === capturedLauncher.id);
+        state.selectedDeviceType = 'relay';
       }
-      if (state.shotEvents) state.shotEvents.launcherReturns += 1;
       clearActiveShotPath();
       playSound('relay');
-      setStatus(`${capturedLauncher.id} 接住了球。开关和门不会重置，调整方向后可以再次发射。`, 'var(--green)');
+      state.effects.push({ x: capturedLauncher.x, y: capturedLauncher.y, vx: 0, vy: 0, age: 0, duration: 0.42, radius: 18, color: relayColor });
+      setStatus(`${capturedLauncher.id} 接住了球。开关和门保持当前状态，请重新瞄准后再次发射。`, 'var(--green)');
       syncControlsFromLauncher();
       syncUi();
       return;
     }
 
     if (switchHit) playSound('switch');
-    else if (relayed) playSound('relay');
     else if (teleported) playSound('portal');
     else if ((wallBounced || obstacleBounced) && performance.now() - state.lastImpactSoundAt > 70) {
       state.lastImpactSoundAt = performance.now();
@@ -1501,7 +1556,8 @@
     if (Math.hypot(state.ball.vx, state.ball.vy) < 28) {
       keepFailedShotPath();
       state.ball.active = false;
-      setStatus('球停下了。本次尝试结束，下一次发射会重置开关、门和移动机关。', 'var(--red)');
+      prepareStartLauncherForRestart();
+      setStatus('球停下了。本次尝试结束；下一次将从 A1 重开并重置全部机关。', 'var(--red)');
       syncUi();
     }
   }
@@ -1516,14 +1572,20 @@
     }
   }
 
-  function simulatePreview(launcher, levelData, obstacleData, relayData, options = {}) {
+  function simulatePreview(launcher, levelData, obstacleData, relayData, runtime = null) {
     const vector = launcherVector(launcher);
     const ball = createBall({ x: launcher.x, y: launcher.y, vx: vector.x * vector.speed, vy: vector.y * vector.speed, radius: 9 });
     ball.originLauncherId = launcher.id;
     ball.launcherCooldown = 0.18;
     const previewObstacles = obstacleData.map((obstacle) => ({ ...obstacle, path: obstacle.path ? { ...obstacle.path } : undefined }));
-    const previewSwitches = (levelData.switches || []).map((switchItem) => ({ ...switchItem, activated: false }));
-    const previewDoors = (levelData.doors || []).map((door) => ({ ...door, open: false }));
+    const previewSwitches = (runtime?.switches || levelData.switches || []).map((switchItem) => ({
+      ...switchItem,
+      activated: Boolean(runtime ? switchItem.activated : false),
+    }));
+    const previewDoors = (runtime?.doors || levelData.doors || []).map((door) => ({
+      ...door,
+      open: Boolean(runtime ? door.open : false),
+    }));
     const points = [{ x: ball.x, y: ball.y }];
     let travelled = 0;
     for (let i = 0; i < 110 && travelled < state.previewDistance; i += 1) {
@@ -1549,11 +1611,9 @@
       updateSwitchHits(ball, previewSwitches, previewDoors, null);
       const teleported = tryTeleport(ball, levelData.portals);
       if (teleported) points.push({ break: true });
-      if (options.includeRelays) {
-        const relayed = tryRelayLaunch(ball, relayData);
-        if (relayed) points.push({ break: true });
-      }
-      if (tryLauncherCapture(ball, levelData.launchers || [])) {
+      if (targetHitThisFrame(previous, ball, levelData.target, ball.radius, teleported)) break;
+      const captureLaunchers = [...(levelData.launchers || []), ...(relayData || [])];
+      if (tryLauncherCapture(ball, captureLaunchers)) {
         points.push({ x: ball.x, y: ball.y });
         break;
       }
@@ -1561,7 +1621,6 @@
       ball.vy *= 0.998;
       travelled += Math.hypot(ball.x - previous.x, ball.y - previous.y);
       if (i % 3 === 0) points.push({ x: ball.x, y: ball.y });
-      if (targetHitThisFrame(previous, ball, levelData.target, ball.radius, teleported)) break;
       if (Math.hypot(ball.vx, ball.vy) < 28) break;
     }
     return points;
@@ -2253,19 +2312,19 @@
     if (state.mode !== 'play') return;
     if (state.ball && state.ball.active) return;
     if (state.completed) return;
+    if (!selectedLauncherCanShoot()) return;
     const current = level();
     drawPreviewPath(
-      simulatePreview(activeLauncher(), current, state.obstacles, state.relayLaunchers, { includeRelays: true }),
-      launcherColor,
-      state.selectedDeviceType === 'start' ? 0.68 : 0.38,
+      simulatePreview(
+        selectedLauncher(),
+        current,
+        state.obstacles,
+        state.relayLaunchers,
+        { switches: state.switches, doors: state.doors },
+      ),
+      state.selectedDeviceType === 'relay' ? emptyLauncherColor : launcherColor,
+      0.72,
     );
-    state.relayLaunchers.forEach((relay, index) => {
-      drawPreviewPath(
-        simulatePreview(relay, current, state.obstacles, state.relayLaunchers, { includeRelays: false }),
-        relayColor,
-        state.selectedDeviceType === 'relay' && state.selectedRelayIndex === index ? 0.74 : 0.4,
-      );
-    });
   }
 
   function drawLastAimPreview() {
@@ -2315,22 +2374,22 @@
 
   function drawLaunchers() {
     state.launchers.forEach((launcher, index) => {
-      const active = state.selectedDeviceType === 'start' && index === state.activeLauncherIndex;
-      drawLauncherShape(launcher, active ? launcherColor : '#8a98a4', launcher.id.replace('A', ''), active);
+      const loaded = launcherCanAim('start', index);
+      drawLauncherShape(launcher, loaded ? launcherColor : emptyLauncherColor, launcher.id.replace('A', ''), loaded);
     });
   }
 
   function drawRelayLaunchers() {
     state.relayLaunchers.forEach((launcher, index) => {
-      const active = state.selectedDeviceType === 'relay' && state.selectedRelayIndex === index;
+      const loaded = launcherIsLoaded('relay', index);
       ctx.save();
-      ctx.strokeStyle = active ? relayGlow : 'rgba(155, 124, 255, 0.24)';
-      ctx.lineWidth = active ? 4 : 3;
+      ctx.strokeStyle = loaded ? relayGlow : emptyLauncherGlow;
+      ctx.lineWidth = loaded ? 4 : 3;
       ctx.beginPath();
       ctx.arc(launcher.x, launcher.y, (launcher.radius || 22) + 10, 0, Math.PI * 2);
       ctx.stroke();
       ctx.restore();
-      drawLauncherShape(launcher, relayColor, launcher.id.replace('R', 'R'), active);
+      drawLauncherShape(launcher, loaded ? relayColor : emptyLauncherColor, launcher.id.replace('R', 'R'), loaded);
     });
   }
 
@@ -2387,10 +2446,10 @@
     if (state.mode === 'editor') {
       ctx.fillText('编辑模式：拖动组件摆放，右侧可精确修改数值', arena.x + 16, arena.y + 24);
     } else {
-      ctx.fillText('A 点发射器', arena.x + 16, arena.y + 24);
+      ctx.fillText('绿色发射器有球，紫色发射器为空', arena.x + 16, arena.y + 24);
       const stickySides = Object.values(arenaWallModes()).filter((mode) => mode === 'sticky').length;
       const wallTip = stickySides > 0 ? '黄色外框会卸力，尽量不要碰边界' : '普通外框可以反弹';
-      ctx.fillText(state.relayLaunchers.length > 0 ? `R 是中继发射器：球碰进去后自动二次发射｜${wallTip}` : wallTip, arena.x + 424, arena.y + arena.height - 18);
+      ctx.fillText(state.relayLaunchers.length > 0 ? `球进入 A 或 R 后会停下，等待重新瞄准｜${wallTip}` : wallTip, arena.x + 424, arena.y + arena.height - 18);
     }
     ctx.restore();
   }
@@ -2425,12 +2484,12 @@
     }));
     drawArena(draft);
     draft.launchers.forEach((launcher, index) => {
-      drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers, { includeRelays: true }), launcherColor, 0.45);
+      drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers), launcherColor, 0.45);
       drawLauncherShape(launcher, launcherColor, launcher.id.replace('A', ''), selectedIs('launcher', index));
     });
     draft.relayLaunchers.forEach((relay, index) => {
-      drawPreviewPath(simulatePreview(relay, draft, obstacles, draft.relayLaunchers, { includeRelays: false }), relayColor, 0.5);
-      drawLauncherShape(relay, relayColor, relay.id.replace('R', 'R'), selectedIs('relay', index));
+      drawPreviewPath(simulatePreview(relay, draft, obstacles, draft.relayLaunchers), emptyLauncherColor, 0.5);
+      drawLauncherShape(relay, emptyLauncherColor, relay.id.replace('R', 'R'), selectedIs('relay', index));
     });
     drawPortals(draft.portals, state.editor.selected);
     drawObstacles(obstacles, state.editor.selected);
@@ -2591,15 +2650,19 @@
   }
 
   function addEditorObject(tool) {
-    beginEditorHistory();
     const draft = state.editor.draft;
+    if (tool === 'start' && draft.launchers.length >= 1) {
+      setEditorStatus('每个关卡只能有一个开局持球的 A 发射器；其余接球点请使用 R 空发射器。', 'var(--red)');
+      return;
+    }
+    beginEditorHistory();
     if (tool === 'start') {
       const id = `A${draft.launchers.length + 1}`;
       draft.launchers.push({ id, x: 128, y: 220 + draft.launchers.length * 72, angle: 0, power: fixedLauncherPower });
       state.editor.selected = { type: 'launcher', index: draft.launchers.length - 1 };
     } else if (tool === 'relay') {
       const id = `R${draft.relayLaunchers.length + 1}`;
-      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: 0, power: fixedLauncherPower, movable: true, purpose: '自定义中继发射器。' });
+      draft.relayLaunchers.push({ id, x: 420, y: 316, radius: 24, angle: 0, power: fixedLauncherPower, movable: true, purpose: '自定义空发射器；接到球后可手动瞄准并发射。' });
       state.editor.selected = { type: 'relay', index: draft.relayLaunchers.length - 1 };
     } else if (tool === 'target') {
       draft.target = { x: 820, y: 300, radius: 18 };
@@ -3024,6 +3087,7 @@
   });
   ui.angle.addEventListener('input', () => {
     if (state.mode !== 'play') return;
+    if (!selectedLauncherCanShoot()) return;
     selectedLauncher().angle = Number(ui.angle.value);
     syncUi();
   });
@@ -3109,17 +3173,24 @@
     }
     if (state.mode !== 'play') return;
     if (state.ball && state.ball.active) return;
+    if (!selectedLauncherCanShoot()) return;
     canvas.focus({ preventScroll: true });
     const point = screenToWorld(event);
     const relayIndex = relayAtPoint(point);
-    canvas.setPointerCapture(event.pointerId);
-    state.draggingAim = true;
     if (relayIndex >= 0) {
+      if (!launcherIsLoaded('relay', relayIndex)) {
+        setStatus(`${state.relayLaunchers[relayIndex].id} 目前是空发射器。球进入后才能瞄准和发射。`, 'var(--amber)');
+        return;
+      }
       selectRelayLauncher(relayIndex);
+      canvas.setPointerCapture(event.pointerId);
+      state.draggingAim = true;
       state.dragMode = 'aim';
-      setStatus(`${state.relayLaunchers[relayIndex].id} 已选中。拖动调整方向，位置固定，力度固定为 700。`, 'var(--amber)');
+      setStatus(`${state.relayLaunchers[relayIndex].id} 内有球。拖动调整方向后再次发射。`, 'var(--green)');
       return;
     }
+    canvas.setPointerCapture(event.pointerId);
+    state.draggingAim = true;
     state.dragMode = 'aim';
     updateAimFromPointer(event);
   });

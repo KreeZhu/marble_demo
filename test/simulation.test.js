@@ -8,7 +8,6 @@ const {
   resolveWallBounce,
   segmentCircleHit,
   tryTeleport,
-  tryRelayLaunch,
   tryLauncherCapture,
   shouldResetAttemptBeforeShot,
   resolveObstacleBounce,
@@ -70,19 +69,19 @@ test('portal teleport preserves speed and offsets from the exit normal', () => {
   assert.ok(ball.portalCooldown > 0);
 });
 
-test('relay launcher re-fires the ball using its own direction and power', () => {
+test('an empty relay launcher captures the ball and waits for a manual second shot', () => {
   const ball = createBall({ x: 200, y: 180, vx: 80, vy: 0, radius: 8 });
   const relays = [
     { id: 'R1', x: 200, y: 180, radius: 18, angle: -90, power: 420 },
   ];
 
-  const relay = tryRelayLaunch(ball, relays);
+  const relay = tryLauncherCapture(ball, relays);
 
   assert.equal(relay.id, 'R1');
-  assert.equal(Math.round(ball.vx), 0);
-  assert.equal(Math.round(ball.vy), -420);
-  assert.ok(ball.y < 180);
-  assert.ok(ball.relayCooldown > 0);
+  assert.equal(ball.active, false);
+  assert.equal(ball.vx, 0);
+  assert.equal(ball.vy, 0);
+  assert.equal(ball.continuesAttempt, true);
 });
 
 test('start launcher can capture a returning ball without resetting state', () => {
@@ -196,14 +195,14 @@ test('sticky obstacle absorbs the ball instead of reflecting it', () => {
 test('stepBall applies velocity in seconds and decays cooldowns', () => {
   const ball = createBall({ x: 10, y: 20, vx: 30, vy: -10, radius: 6 });
   ball.portalCooldown = 0.5;
-  ball.relayCooldown = 0.5;
+  ball.launcherCooldown = 0.5;
 
   stepBall(ball, 0.25);
 
   assert.equal(ball.x, 17.5);
   assert.equal(ball.y, 17.5);
   assert.equal(ball.portalCooldown, 0.25);
-  assert.equal(ball.relayCooldown, 0.25);
+  assert.equal(ball.launcherCooldown, 0.25);
 });
 
 test('target hit ignores the artificial long segment created by teleporting', () => {

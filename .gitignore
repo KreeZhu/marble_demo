@@ -2,3 +2,6 @@ node_modules/
 .DS_Store
 Thumbs.db
 playtest-*.png
+docs/_render_*/
+docs/gdd_v1_render.docx
+docs/gdd_v1_render.pdf
