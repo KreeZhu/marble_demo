@@ -8,7 +8,7 @@
     targetHitThisFrame,
     tryTeleport,
     tryLauncherCapture,
-    shouldResetAttemptBeforeShot,
+    isFailedAttempt,
     resolveObstacleBounce,
     resolveShapedObstacleBounce,
     rotatedRectPoints,
@@ -576,12 +576,8 @@
     return selectedLauncher();
   }
 
-  function attemptNeedsRestart() {
-    return Boolean(state.ball && !state.ball.active && !state.ball.continuesAttempt && !state.completed);
-  }
-
   function launcherIsLoaded(type, index) {
-    if (state.completed || (state.ball && state.ball.active) || attemptNeedsRestart()) return false;
+    if (state.completed || (state.ball && state.ball.active)) return false;
     if (!state.ball) return type === 'start' && index === 0;
     if (!state.ball.continuesAttempt) return false;
     if (type === 'relay') return state.selectedDeviceType === 'relay' && state.selectedRelayIndex === index;
@@ -589,27 +585,12 @@
   }
 
   function launcherCanAim(type, index) {
-    if (launcherIsLoaded(type, index)) return true;
-    return attemptNeedsRestart() && type === 'start' && index === 0;
+    return launcherIsLoaded(type, index);
   }
 
   function selectedLauncherCanShoot() {
     const index = state.selectedDeviceType === 'relay' ? state.selectedRelayIndex : state.activeLauncherIndex;
     return launcherCanAim(state.selectedDeviceType, index);
-  }
-
-  function prepareStartLauncherForRestart() {
-    state.selectedDeviceType = 'start';
-    state.activeLauncherIndex = 0;
-    state.selectedRelayIndex = 0;
-    const launcher = state.launchers[0];
-    if (state.ball && launcher) {
-      state.ball.x = launcher.x;
-      state.ball.y = launcher.y;
-      state.ball.vx = 0;
-      state.ball.vy = 0;
-    }
-    syncControlsFromLauncher();
   }
 
   function setStatus(text, tone) {
@@ -1066,23 +1047,20 @@
     ui.prevLevel.disabled = Boolean(state.testLevel) || state.levelIndex === 0;
     ui.nextLevel.disabled = Boolean(state.testLevel) || state.levelIndex === levels.length - 1;
     ui.shoot.disabled = state.mode !== 'play' || Boolean(state.ball && state.ball.active) || state.completed || !canControlLauncher;
-    ui.shoot.textContent = attemptNeedsRestart() ? `从 ${state.launchers[0]?.id || 'A1'} 重开` : '发射 Space';
+    ui.shoot.textContent = '发射 Space';
 
     ui.launcherButtons.innerHTML = '';
     state.launchers.forEach((item, index) => {
       const loaded = launcherIsLoaded('start', index);
-      const restart = attemptNeedsRestart() && index === 0;
       const button = document.createElement('button');
       button.type = 'button';
-      button.textContent = `${item.id} · ${loaded ? '有球' : restart ? '重开' : '空'}`;
-      button.className = loaded || restart ? 'active' : '';
-      button.disabled = !loaded && !restart;
+      button.textContent = `${item.id} · ${loaded ? '有球' : '空'}`;
+      button.className = loaded ? 'active' : '';
+      button.disabled = !loaded;
       button.addEventListener('click', () => {
         if (state.ball && state.ball.active) return;
         selectStartLauncher(index);
-        setStatus(restart
-          ? `${item.id} 将开始新尝试。发射时会重置开关、门和移动机关。`
-          : `${item.id} 内有球。调整方向后再次发射，力度固定为 700。`, restart ? 'var(--amber)' : 'var(--green)');
+        setStatus(`${item.id} 内有球。调整方向后再次发射，力度固定为 700。`, 'var(--green)');
       });
       ui.launcherButtons.append(button);
     });
@@ -1318,6 +1296,18 @@
     state.selectedRelayIndex = 0;
     state.shotEvents = null;
     hideCompletionPrompt();
+    syncControlsFromLauncher();
+  }
+
+  function finishFailedAttempt(message, soundName) {
+    if (!state.ball) return;
+    state.ball.active = false;
+    if (!isFailedAttempt(state.ball)) return;
+    keepFailedShotPath();
+    resetAttemptRuntime();
+    setStatus(`${message} 关卡已重置，可以立即从 A1 重新发射。`, 'var(--red)');
+    if (soundName) playSound(soundName);
+    syncUi();
   }
 
   function setLevel(index) {
@@ -1338,7 +1328,6 @@
     if (state.ball && state.ball.active) return;
     if (state.completed) return;
     ensureAudio();
-    if (shouldResetAttemptBeforeShot(state.ball)) resetAttemptRuntime();
     if (!selectedLauncherCanShoot()) return;
     const launcher = shotLauncher();
     const firedFromRelay = state.selectedDeviceType === 'relay';
@@ -1456,12 +1445,7 @@
         return;
       }
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
-      keepFailedShotPath();
-      state.ball.active = false;
-      prepareStartLauncherForRestart();
-      setStatus('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'var(--red)');
-      playSound('stickyImpact');
-      syncUi();
+      finishFailedAttempt('碰到黄色卸力边界，球被吸住了。这个关卡不能依赖这条外框反弹。', 'stickyImpact');
       return;
     }
 
@@ -1488,12 +1472,7 @@
         return;
       }
       recordShotPoint({ x: state.ball.x, y: state.ball.y });
-      keepFailedShotPath();
-      state.ball.active = false;
-      prepareStartLauncherForRestart();
-      setStatus('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'var(--red)');
-      playSound('stickyImpact');
-      syncUi();
+      finishFailedAttempt('碰到黄色卸力墙，球被吸住了。避开这片区域再试。', 'stickyImpact');
       return;
     }
 
@@ -1554,11 +1533,7 @@
     if (state.ball.trail.length > 44) state.ball.trail.shift();
 
     if (Math.hypot(state.ball.vx, state.ball.vy) < 28) {
-      keepFailedShotPath();
-      state.ball.active = false;
-      prepareStartLauncherForRestart();
-      setStatus('球停下了。本次尝试结束；下一次将从 A1 重开并重置全部机关。', 'var(--red)');
-      syncUi();
+      finishFailedAttempt('球停下了，本次尝试失败。');
     }
   }
 

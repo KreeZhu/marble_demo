@@ -144,7 +144,7 @@
     return capturedLauncher;
   }
 
-  function shouldResetAttemptBeforeShot(ball) {
+  function isFailedAttempt(ball) {
     return Boolean(ball && !ball.active && !ball.continuesAttempt);
   }
 
@@ -419,7 +419,7 @@
     targetHitThisFrame,
     tryTeleport,
     tryLauncherCapture,
-    shouldResetAttemptBeforeShot,
+    isFailedAttempt,
     resolveObstacleBounce,
     resolveRotatedRectObstacleBounce,
     resolveCircleObstacleBounce,

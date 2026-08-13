@@ -9,7 +9,7 @@ const {
   segmentCircleHit,
   tryTeleport,
   tryLauncherCapture,
-  shouldResetAttemptBeforeShot,
+  isFailedAttempt,
   resolveObstacleBounce,
   resolveShapedObstacleBounce,
   targetHitThisFrame,
@@ -117,16 +117,16 @@ test('any start launcher can capture the same ball and continue the attempt', ()
   assert.equal(ball.continuesAttempt, true);
 });
 
-test('a failed stopped ball resets the attempt, but a captured ball continues it', () => {
+test('a stopped uncaptured ball is a failure, but a captured ball continues the attempt', () => {
   const stoppedBall = createBall({ x: 300, y: 200 });
   stoppedBall.active = false;
   const capturedBall = createBall({ x: 120, y: 200 });
   capturedBall.active = false;
   capturedBall.continuesAttempt = true;
 
-  assert.equal(shouldResetAttemptBeforeShot(stoppedBall), true);
-  assert.equal(shouldResetAttemptBeforeShot(capturedBall), false);
-  assert.equal(shouldResetAttemptBeforeShot(null), false);
+  assert.equal(isFailedAttempt(stoppedBall), true);
+  assert.equal(isFailedAttempt(capturedBall), false);
+  assert.equal(isFailedAttempt(null), false);
 });
 
 test('moving obstacle collision reflects the ball using the nearest face', () => {
