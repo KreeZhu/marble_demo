@@ -106,26 +106,29 @@
   };
   const arena = { ...mapSizes.small.arena };
   const soundVolume = 1.35;
-  const launcherColor = '#41d692';
-  const launcherGlow = 'rgba(65, 214, 146, 0.42)';
+  const launcherColor = '#54f7b2';
+  const launcherGlow = 'rgba(84, 247, 178, 0.46)';
   const relayColor = launcherColor;
   const relayGlow = launcherGlow;
-  const emptyLauncherColor = '#9b7cff';
-  const emptyLauncherGlow = 'rgba(155, 124, 255, 0.36)';
+  const emptyLauncherColor = '#a98bff';
+  const emptyLauncherGlow = 'rgba(169, 139, 255, 0.38)';
   const stickyArenaWalls = { top: 'sticky', right: 'sticky', bottom: 'sticky', left: 'sticky' };
   const art = {
-    metal: '#596977',
-    metalDark: '#303943',
+    metal: '#6d8292',
+    metalDark: '#17212a',
     boost: '#4ee06f',
     boostCore: '#d7ff7a',
     sticky: '#f2c84b',
-    stickyDark: '#6f5712',
-    moving: '#ffbf47',
-    start: '#41d692',
-    target: '#41d692',
-    bluePortal: '#55a7ff',
-    orangePortal: '#ff8f57',
-    red: '#e43d35',
+    stickyDark: '#5d490f',
+    moving: '#ffbd52',
+    start: '#54f7b2',
+    target: '#54f7b2',
+    bluePortal: '#53c8ff',
+    orangePortal: '#ff8a4c',
+    red: '#ff4149',
+    cyan: '#5ce7ff',
+    ink: '#070b10',
+    floor: '#0b1219',
   };
 
   const state = {
@@ -1635,20 +1638,78 @@
 
   function drawGrid() {
     ctx.save();
-    ctx.strokeStyle = 'rgba(116, 137, 154, 0.11)';
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.045)';
     ctx.lineWidth = 1;
-    for (let x = arena.x; x <= arena.x + arena.width; x += 48) {
+    for (let x = arena.x; x <= arena.x + arena.width; x += 24) {
       ctx.beginPath();
       ctx.moveTo(x, arena.y);
       ctx.lineTo(x, arena.y + arena.height);
       ctx.stroke();
     }
-    for (let y = arena.y; y <= arena.y + arena.height; y += 48) {
+    for (let y = arena.y; y <= arena.y + arena.height; y += 24) {
       ctx.beginPath();
       ctx.moveTo(arena.x, y);
       ctx.lineTo(arena.x + arena.width, y);
       ctx.stroke();
     }
+
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.105)';
+    ctx.lineWidth = 1.25;
+    for (let x = arena.x; x <= arena.x + arena.width; x += 96) {
+      ctx.beginPath();
+      ctx.moveTo(x, arena.y);
+      ctx.lineTo(x, arena.y + arena.height);
+      ctx.stroke();
+    }
+    for (let y = arena.y; y <= arena.y + arena.height; y += 96) {
+      ctx.beginPath();
+      ctx.moveTo(arena.x, y);
+      ctx.lineTo(arena.x + arena.width, y);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function drawFloorDetails() {
+    const circuits = [
+      [0.07, 0.18, 0.2, 0.18, 0.24, 0.12],
+      [0.68, 0.16, 0.82, 0.16, 0.87, 0.24],
+      [0.12, 0.78, 0.28, 0.78, 0.34, 0.86],
+      [0.7, 0.82, 0.84, 0.82, 0.91, 0.72],
+    ];
+    ctx.save();
+    ctx.lineCap = 'square';
+    ctx.lineJoin = 'miter';
+    circuits.forEach((circuit, index) => {
+      const [sx, sy, mx, my, ex, ey] = circuit;
+      ctx.strokeStyle = index % 2 ? 'rgba(169, 139, 255, 0.1)' : 'rgba(92, 231, 255, 0.11)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.moveTo(arena.x + arena.width * sx, arena.y + arena.height * sy);
+      ctx.lineTo(arena.x + arena.width * mx, arena.y + arena.height * my);
+      ctx.lineTo(arena.x + arena.width * ex, arena.y + arena.height * ey);
+      ctx.stroke();
+      ctx.fillStyle = index % 2 ? 'rgba(169, 139, 255, 0.28)' : 'rgba(92, 231, 255, 0.28)';
+      ctx.beginPath();
+      ctx.arc(arena.x + arena.width * ex, arena.y + arena.height * ey, 3, 0, Math.PI * 2);
+      ctx.fill();
+    });
+
+    const cornerSize = Math.max(20, Math.round(arena.width * 0.025));
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.24)';
+    ctx.lineWidth = 2;
+    [
+      [arena.x + 20, arena.y + 20, 1, 1],
+      [arena.x + arena.width - 20, arena.y + 20, -1, 1],
+      [arena.x + 20, arena.y + arena.height - 20, 1, -1],
+      [arena.x + arena.width - 20, arena.y + arena.height - 20, -1, -1],
+    ].forEach(([x, y, dx, dy]) => {
+      ctx.beginPath();
+      ctx.moveTo(x + dx * cornerSize, y);
+      ctx.lineTo(x, y);
+      ctx.lineTo(x, y + dy * cornerSize);
+      ctx.stroke();
+    });
     ctx.restore();
   }
 
@@ -1709,53 +1770,81 @@
   function drawArena(levelData = level()) {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
     const background = ctx.createLinearGradient(0, 0, canvas.width, canvas.height);
-    background.addColorStop(0, '#0d1116');
-    background.addColorStop(0.58, '#141a20');
-    background.addColorStop(1, '#101316');
+    background.addColorStop(0, '#05080c');
+    background.addColorStop(0.58, '#0b1118');
+    background.addColorStop(1, '#05070a');
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     const floor = ctx.createLinearGradient(arena.x, arena.y, arena.x, arena.y + arena.height);
-    floor.addColorStop(0, '#1a232b');
-    floor.addColorStop(1, '#12191f');
+    floor.addColorStop(0, '#111b24');
+    floor.addColorStop(0.5, '#0b141c');
+    floor.addColorStop(1, '#080f15');
     ctx.fillStyle = floor;
     ctx.fillRect(arena.x, arena.y, arena.width, arena.height);
     drawGrid();
+    drawFloorDetails();
+    const vignette = ctx.createRadialGradient(
+      arena.x + arena.width / 2,
+      arena.y + arena.height / 2,
+      Math.min(arena.width, arena.height) * 0.08,
+      arena.x + arena.width / 2,
+      arena.y + arena.height / 2,
+      Math.max(arena.width, arena.height) * 0.68,
+    );
+    vignette.addColorStop(0, 'rgba(7, 18, 25, 0)');
+    vignette.addColorStop(1, 'rgba(0, 2, 5, 0.48)');
+    ctx.fillStyle = vignette;
+    ctx.fillRect(arena.x, arena.y, arena.width, arena.height);
     drawArenaWallSides(levelData);
-    ctx.strokeStyle = 'rgba(65, 214, 146, 0.16)';
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.18)';
     ctx.lineWidth = 1;
     ctx.strokeRect(arena.x + 12, arena.y + 12, arena.width - 24, arena.height - 24);
   }
 
   function drawTarget(target = level().target, selected = false) {
     const pulse = 0.5 + Math.sin(performance.now() / 260) * 0.5;
+    const spin = performance.now() / 1300;
     ctx.save();
     ctx.translate(target.x, target.y);
-    ctx.fillStyle = `rgba(65, 214, 146, ${selected ? 0.28 : 0.12 + pulse * 0.04})`;
+    ctx.shadowColor = art.target;
+    ctx.shadowBlur = selected ? 26 : 12 + pulse * 5;
+    ctx.fillStyle = `rgba(84, 247, 178, ${selected ? 0.24 : 0.08 + pulse * 0.04})`;
     ctx.beginPath();
-    ctx.arc(0, 0, target.radius + 16, 0, Math.PI * 2);
+    ctx.arc(0, 0, target.radius + 19, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(5, 14, 16, 0.94)';
+    ctx.beginPath();
+    ctx.arc(0, 0, target.radius + 8, 0, Math.PI * 2);
     ctx.fill();
     ctx.strokeStyle = art.target;
     ctx.lineWidth = selected ? 6 : 4;
     ctx.beginPath();
     ctx.arc(0, 0, target.radius, 0, Math.PI * 2);
     ctx.stroke();
-    ctx.strokeStyle = 'rgba(244,247,251,0.34)';
+    ctx.save();
+    ctx.rotate(spin);
+    ctx.strokeStyle = 'rgba(220, 255, 244, 0.7)';
+    ctx.lineWidth = 2.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, target.radius + 8, 0.08, Math.PI * 0.48);
+    ctx.arc(0, 0, target.radius + 8, Math.PI * 0.58, Math.PI * 0.98);
+    ctx.arc(0, 0, target.radius + 8, Math.PI * 1.08, Math.PI * 1.48);
+    ctx.arc(0, 0, target.radius + 8, Math.PI * 1.58, Math.PI * 1.98);
+    ctx.stroke();
+    ctx.restore();
+    ctx.strokeStyle = 'rgba(244,247,251,0.46)';
     ctx.lineWidth = 2;
     ctx.beginPath();
-    ctx.arc(0, 0, target.radius + 7, 0.2, Math.PI * 1.55);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(-target.radius - 10, 0);
-    ctx.lineTo(-target.radius - 3, 0);
-    ctx.moveTo(target.radius + 3, 0);
-    ctx.lineTo(target.radius + 10, 0);
-    ctx.moveTo(0, -target.radius - 10);
-    ctx.lineTo(0, -target.radius - 3);
-    ctx.moveTo(0, target.radius + 3);
-    ctx.lineTo(0, target.radius + 10);
+    const markerOuter = target.radius + 17;
+    const markerInner = target.radius + 8;
+    ctx.moveTo(-markerOuter, 0); ctx.lineTo(-markerInner, 0);
+    ctx.moveTo(markerInner, 0); ctx.lineTo(markerOuter, 0);
+    ctx.moveTo(0, -markerOuter); ctx.lineTo(0, -markerInner);
+    ctx.moveTo(0, markerInner); ctx.lineTo(0, markerOuter);
     ctx.stroke();
     ctx.fillStyle = '#f4f7fb';
-    ctx.font = '700 18px Microsoft YaHei, Segoe UI, sans-serif';
+    ctx.font = '900 18px Microsoft YaHei, Segoe UI, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
     ctx.fillText('B', 0, 1);
@@ -1764,41 +1853,66 @@
 
   function drawLauncherShape(launcher, color, label, active = false) {
     const radians = launcher.angle * Math.PI / 180;
+    const spin = performance.now() / 900;
     ctx.save();
     ctx.shadowColor = color;
-    ctx.shadowBlur = active ? 18 : 7;
-    ctx.fillStyle = 'rgba(244,247,251,0.08)';
+    ctx.shadowBlur = active ? 22 : 9;
+    ctx.fillStyle = active ? `${color}22` : 'rgba(244,247,251,0.05)';
     ctx.beginPath();
-    ctx.arc(launcher.x, launcher.y, active ? 27 : 22, 0, Math.PI * 2);
+    ctx.arc(launcher.x, launcher.y, active ? 30 : 25, 0, Math.PI * 2);
     ctx.fill();
     ctx.restore();
 
     ctx.save();
     ctx.translate(launcher.x, launcher.y);
-    ctx.rotate(radians);
-    const barrel = ctx.createLinearGradient(0, -8, 38, 8);
-    barrel.addColorStop(0, color);
-    barrel.addColorStop(1, '#f4f7fb');
-    ctx.fillStyle = barrel;
-    roundRectPath(0, -7, 36, 14, 4);
-    ctx.fill();
-    ctx.strokeStyle = 'rgba(7, 18, 13, 0.55)';
+    ctx.rotate(active ? spin : 0);
+    ctx.strokeStyle = active ? color : 'rgba(169, 139, 255, 0.48)';
     ctx.lineWidth = 2;
-    ctx.stroke();
+    ctx.setLineDash([8, 6]);
     ctx.beginPath();
-    ctx.moveTo(42, 0);
-    ctx.lineTo(27, -13);
-    ctx.lineTo(27, 13);
-    ctx.closePath();
-    ctx.fillStyle = color;
-    ctx.fill();
+    ctx.arc(0, 0, active ? 24 : 21, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.setLineDash([]);
     ctx.restore();
 
     ctx.save();
-    const base = ctx.createRadialGradient(launcher.x - 5, launcher.y - 6, 3, launcher.x, launcher.y, active ? 21 : 17);
+    ctx.translate(launcher.x, launcher.y);
+    ctx.rotate(radians);
+    ctx.fillStyle = '#071018';
+    roundRectPath(-2, -10, 43, 20, 5);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(226, 243, 250, 0.32)';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    const barrel = ctx.createLinearGradient(0, -7, 38, 7);
+    barrel.addColorStop(0, '#192832');
+    barrel.addColorStop(0.48, color);
+    barrel.addColorStop(0.62, '#eafff8');
+    barrel.addColorStop(1, color);
+    ctx.fillStyle = barrel;
+    roundRectPath(1, -6, 38, 12, 3);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(5, 12, 16, 0.72)';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(46, 0);
+    ctx.lineTo(33, -13);
+    ctx.lineTo(33, 13);
+    ctx.closePath();
+    ctx.fillStyle = color;
+    ctx.fill();
+    ctx.strokeStyle = '#eafff8';
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.restore();
+
+    ctx.save();
+    const base = ctx.createRadialGradient(launcher.x - 5, launcher.y - 6, 2, launcher.x, launcher.y, active ? 20 : 17);
     base.addColorStop(0, '#f4f7fb');
-    base.addColorStop(0.2, color);
-    base.addColorStop(1, '#182027');
+    base.addColorStop(active ? 0.24 : 0.1, color);
+    base.addColorStop(0.62, active ? '#193c34' : '#2a2147');
+    base.addColorStop(1, '#070c12');
     ctx.fillStyle = base;
     ctx.beginPath();
     ctx.arc(launcher.x, launcher.y, active ? 17 : (launcher.radius || 14), 0, Math.PI * 2);
@@ -1806,7 +1920,7 @@
     ctx.strokeStyle = active ? '#f4f7fb' : 'rgba(255,255,255,0.24)';
     ctx.lineWidth = active ? 3 : 1;
     ctx.stroke();
-    ctx.fillStyle = '#07120d';
+    ctx.fillStyle = active ? '#06120d' : '#f3efff';
     ctx.font = '800 13px Microsoft YaHei, Segoe UI, sans-serif';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
@@ -1997,32 +2111,61 @@
     const bounds = obstacleBounds(obstacle);
     const isBoost = obstacle.material === 'boost';
     const isSticky = obstacle.material === 'sticky';
+    ctx.save();
+    ctx.strokeStyle = 'rgba(2, 5, 8, 0.92)';
+    ctx.lineWidth = isSticky ? 9 : 7;
+    traceObstacleShape(obstacle);
+    ctx.stroke();
+    ctx.restore();
+
     const gradient = ctx.createLinearGradient(bounds.x, bounds.y, bounds.x + bounds.width, bounds.y + bounds.height);
-    gradient.addColorStop(0, fillStyle);
-    gradient.addColorStop(1, isBoost ? '#6735a8' : isSticky ? art.stickyDark : art.metalDark);
+    gradient.addColorStop(0, isBoost ? '#153c2b' : isSticky ? '#514510' : '#526979');
+    gradient.addColorStop(0.44, isBoost ? fillStyle : isSticky ? '#ad8b20' : '#25333e');
+    gradient.addColorStop(1, isBoost ? '#123c26' : isSticky ? art.stickyDark : art.metalDark);
     ctx.fillStyle = gradient;
     traceObstacleShape(obstacle);
     ctx.fill();
-    ctx.strokeStyle = isBoost ? 'rgba(103,240,255,0.75)' : isSticky ? 'rgba(255, 214, 150, 0.82)' : 'rgba(244,247,251,0.24)';
-    ctx.lineWidth = isSticky ? 3 : 2;
+    ctx.strokeStyle = isBoost ? 'rgba(105, 255, 160, 0.92)' : isSticky ? 'rgba(255, 224, 100, 0.92)' : 'rgba(207, 232, 244, 0.48)';
+    ctx.lineWidth = isSticky ? 3.5 : 2.5;
     ctx.stroke();
 
     ctx.save();
     traceObstacleShape(obstacle);
     ctx.clip();
-    ctx.globalAlpha = isBoost ? 0.82 : isSticky ? 0.72 : 0.36;
-    ctx.strokeStyle = isBoost ? art.boostCore : isSticky ? 'rgba(46, 26, 13, 0.72)' : 'rgba(244,247,251,0.28)';
-    ctx.lineWidth = isBoost ? 3 : isSticky ? 4 : 1;
-    const step = isBoost ? 22 : isSticky ? 20 : 18;
-    for (let x = bounds.x - bounds.height; x < bounds.x + bounds.width + bounds.height; x += step) {
+    ctx.globalAlpha = isBoost ? 0.78 : isSticky ? 0.72 : 0.3;
+    ctx.strokeStyle = isBoost ? art.boostCore : isSticky ? 'rgba(42, 31, 5, 0.88)' : 'rgba(219, 239, 248, 0.32)';
+    ctx.lineWidth = isBoost ? 3 : isSticky ? 5 : 1;
+    const step = isBoost ? 24 : isSticky ? 22 : 20;
+    const flow = isBoost ? (performance.now() / 35) % step : 0;
+    for (let x = bounds.x - bounds.height + flow; x < bounds.x + bounds.width + bounds.height; x += step) {
       ctx.beginPath();
       ctx.moveTo(x, bounds.y + bounds.height + 8);
       ctx.lineTo(x + bounds.height, bounds.y - 8);
       ctx.stroke();
     }
+    ctx.globalAlpha = 0.58;
+    ctx.strokeStyle = isBoost ? 'rgba(230, 255, 224, 0.78)' : isSticky ? 'rgba(255, 237, 140, 0.46)' : 'rgba(232, 247, 255, 0.34)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.moveTo(bounds.x + 7, bounds.y + 7);
+    ctx.lineTo(bounds.x + bounds.width - 7, bounds.y + 7);
+    ctx.stroke();
+
+    if (!isBoost && !isSticky) {
+      ctx.globalAlpha = 0.44;
+      ctx.strokeStyle = 'rgba(3, 8, 12, 0.9)';
+      ctx.lineWidth = 2;
+      const split = Math.max(34, Math.min(72, bounds.width / 2));
+      for (let x = bounds.x + split; x < bounds.x + bounds.width; x += split) {
+        ctx.beginPath();
+        ctx.moveTo(x, bounds.y + 4);
+        ctx.lineTo(x, bounds.y + bounds.height - 4);
+        ctx.stroke();
+      }
+    }
     if (isSticky) {
       ctx.globalAlpha = 0.86;
-      ctx.fillStyle = 'rgba(255, 214, 150, 0.78)';
+      ctx.fillStyle = 'rgba(255, 242, 156, 0.9)';
       ctx.font = `800 ${Math.max(13, Math.min(22, bounds.height * 0.42))}px Microsoft YaHei, Segoe UI, sans-serif`;
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
@@ -2030,10 +2173,13 @@
     }
     if (obstacle.path) {
       ctx.globalAlpha = 0.9;
-      ctx.fillStyle = 'rgba(7, 18, 13, 0.42)';
+      ctx.fillStyle = 'rgba(5, 10, 14, 0.82)';
       ctx.beginPath();
       ctx.arc(bounds.x + bounds.width / 2, bounds.y + bounds.height / 2, Math.min(12, bounds.width / 3, bounds.height / 3), 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = art.moving;
+      ctx.lineWidth = 2;
+      ctx.stroke();
     }
     if (obstacle.shape === 'circle') {
       const radius = obstacle.radius || 28;
@@ -2051,6 +2197,22 @@
       ctx.fill();
     }
     ctx.restore();
+
+    ctx.save();
+    ctx.globalAlpha = 0.62;
+    ctx.fillStyle = isBoost ? '#d7ff7a' : isSticky ? '#fff0a0' : '#c4d8e4';
+    const boltRadius = Math.max(1.4, Math.min(2.4, Math.min(bounds.width, bounds.height) * 0.055));
+    [
+      [bounds.x + 8, bounds.y + 8],
+      [bounds.x + bounds.width - 8, bounds.y + 8],
+      [bounds.x + 8, bounds.y + bounds.height - 8],
+      [bounds.x + bounds.width - 8, bounds.y + bounds.height - 8],
+    ].forEach(([x, y]) => {
+      ctx.beginPath();
+      ctx.arc(x, y, boltRadius, 0, Math.PI * 2);
+      ctx.fill();
+    });
+    ctx.restore();
   }
 
   function drawObstacles(obstacles = state.obstacles, selected = null) {
@@ -2064,22 +2226,23 @@
         const originY = obstacle.originY || obstacle.y;
         const centerOffsetX = obstacle.shape === 'rect' || !obstacle.shape ? obstacle.width / 2 : 0;
         const centerOffsetY = obstacle.shape === 'rect' || !obstacle.shape ? obstacle.height / 2 : 0;
-        ctx.strokeStyle = active ? 'rgba(255, 191, 71, 0.82)' : 'rgba(255, 191, 71, 0.32)';
-        ctx.lineWidth = 3;
-        ctx.setLineDash([7, 9]);
+        ctx.strokeStyle = active ? 'rgba(255, 189, 82, 0.9)' : 'rgba(255, 189, 82, 0.42)';
+        ctx.lineWidth = 4;
+        ctx.setLineDash([4, 8]);
+        ctx.lineDashOffset = -performance.now() / 70;
         ctx.beginPath();
         ctx.moveTo(originX + centerOffsetX, originY + centerOffsetY);
         ctx.lineTo(originX + centerOffsetX + obstacle.path.x, originY + centerOffsetY + obstacle.path.y);
         ctx.stroke();
         ctx.setLineDash([]);
-        ctx.fillStyle = 'rgba(255, 191, 71, 0.18)';
+        ctx.fillStyle = 'rgba(255, 189, 82, 0.42)';
         ctx.beginPath();
         ctx.arc(originX + centerOffsetX, originY + centerOffsetY, 5, 0, Math.PI * 2);
         ctx.arc(originX + centerOffsetX + obstacle.path.x, originY + centerOffsetY + obstacle.path.y, 5, 0, Math.PI * 2);
         ctx.fill();
       }
       ctx.shadowColor = obstacle.material === 'boost' ? art.boost : obstacle.material === 'sticky' ? art.sticky : (moving ? art.moving : '#000');
-      ctx.shadowBlur = obstacle.material === 'boost' ? 12 : obstacle.material === 'sticky' ? 9 : (moving ? 8 : 2);
+      ctx.shadowBlur = obstacle.material === 'boost' ? 15 : obstacle.material === 'sticky' ? 10 : (moving ? 10 : 3);
       drawObstacleShape(obstacle, obstacleColor(obstacle));
       if (active) {
         ctx.strokeStyle = 'rgba(244,247,251,0.38)';
@@ -2100,30 +2263,52 @@
       ctx.save();
       ctx.translate(portal.x, portal.y);
       ctx.shadowColor = color;
-      ctx.shadowBlur = active ? 20 : 12;
+      ctx.shadowBlur = active ? 24 : 14;
       ctx.fillStyle = portal.id.includes('blue') ? 'rgba(85, 167, 255, 0.08)' : 'rgba(255, 143, 87, 0.08)';
       ctx.beginPath();
-      ctx.arc(0, 0, portal.radius + 14, 0, Math.PI * 2);
+      ctx.arc(0, 0, portal.radius + 17, 0, Math.PI * 2);
       ctx.fill();
+      const voidGradient = ctx.createRadialGradient(-6, -8, 2, 0, 0, portal.radius + 2);
+      voidGradient.addColorStop(0, 'rgba(215, 248, 255, 0.18)');
+      voidGradient.addColorStop(0.32, 'rgba(8, 22, 34, 0.94)');
+      voidGradient.addColorStop(1, 'rgba(1, 3, 8, 0.98)');
+      ctx.fillStyle = voidGradient;
+      ctx.beginPath();
+      ctx.arc(0, 0, portal.radius + 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = 'rgba(1, 5, 9, 0.94)';
+      ctx.lineWidth = 10;
+      ctx.beginPath();
+      ctx.arc(0, 0, portal.radius + 9, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.shadowColor = color;
+      ctx.shadowBlur = active ? 22 : 12;
       ctx.strokeStyle = color;
       ctx.lineWidth = active ? 7 : 5;
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius, 0, Math.PI * 2);
       ctx.stroke();
       ctx.rotate(spin);
-      ctx.strokeStyle = '#f4f7fb';
+      ctx.strokeStyle = '#eaffff';
       ctx.globalAlpha = active ? 0.86 : 0.62;
       ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.arc(0, 0, portal.radius + 7, 0, Math.PI * 0.62);
+      ctx.arc(0, 0, portal.radius + 8, 0, Math.PI * 0.38);
+      ctx.arc(0, 0, portal.radius + 8, Math.PI * 0.58, Math.PI * 0.96);
+      ctx.arc(0, 0, portal.radius + 8, Math.PI * 1.16, Math.PI * 1.54);
+      ctx.arc(0, 0, portal.radius + 8, Math.PI * 1.74, Math.PI * 1.98);
       ctx.stroke();
-      ctx.strokeStyle = active ? '#f4f7fb' : 'rgba(255, 255, 255, 0.28)';
-      ctx.lineWidth = 2;
+      ctx.rotate(-spin * 1.8);
+      ctx.strokeStyle = active ? '#f4f7fb' : `${color}88`;
+      ctx.lineWidth = 1.5;
+      ctx.setLineDash([3, 7]);
       ctx.beginPath();
-      ctx.arc(0, 0, portal.radius + 8, 0, Math.PI * 2);
+      ctx.arc(0, 0, portal.radius + 13, 0, Math.PI * 2);
       ctx.stroke();
+      ctx.setLineDash([]);
       if (Number.isFinite(portal.exitAngle)) {
-        ctx.rotate(portal.exitAngle - spin);
+        ctx.rotate(portal.exitAngle + spin * 0.8);
         ctx.fillStyle = color;
         ctx.beginPath();
         ctx.moveTo(portal.radius + 12, 0);
@@ -2155,6 +2340,14 @@
       ctx.beginPath();
       ctx.arc(0, 0, radius + 10, 0, Math.PI * 2);
       ctx.fill();
+      ctx.strokeStyle = 'rgba(255, 116, 116, 0.32)';
+      ctx.lineWidth = 5;
+      ctx.setLineDash([3, 6]);
+      ctx.lineDashOffset = -performance.now() / 80;
+      ctx.beginPath();
+      ctx.arc(0, 0, radius + 11, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
       ctx.strokeStyle = `rgba(255, 214, 170, ${0.46 + pulse * 0.34})`;
       ctx.lineWidth = 3;
       ctx.beginPath();
@@ -2219,6 +2412,9 @@
       ctx.globalAlpha = door.open ? 0.34 : 1;
       ctx.shadowColor = art.red;
       ctx.shadowBlur = door.open ? 9 + pulse * 8 : 16 + pulse * 7;
+      ctx.fillStyle = 'rgba(2, 5, 8, 0.92)';
+      roundRectPath(door.x - 5, door.y - 5, door.width + 10, door.height + 10, 5);
+      ctx.fill();
       const body = ctx.createLinearGradient(door.x, door.y, door.x + door.width, door.y + door.height);
       body.addColorStop(0, door.open ? '#ffcf77' : '#ff8d7f');
       body.addColorStop(0.42, door.open ? '#ff4f45' : '#e43238');
@@ -2364,22 +2560,51 @@
   function drawBall() {
     if (!state.ball) return;
     ctx.save();
-    if (state.ball.active) {
+    if (state.ball.active && state.ball.trail.length > 1) {
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.beginPath();
       state.ball.trail.forEach((point, index) => {
-        const alpha = index / state.ball.trail.length;
-        ctx.fillStyle = `rgba(85, 167, 255, ${alpha * 0.34})`;
-        ctx.beginPath();
-        ctx.arc(point.x, point.y, 4 + alpha * 4, 0, Math.PI * 2);
-        ctx.fill();
+        if (index === 0) ctx.moveTo(point.x, point.y);
+        else ctx.lineTo(point.x, point.y);
       });
+      ctx.strokeStyle = 'rgba(36, 156, 255, 0.18)';
+      ctx.lineWidth = 9;
+      ctx.shadowColor = 'rgba(83, 200, 255, 0.52)';
+      ctx.shadowBlur = 10;
+      ctx.stroke();
+      ctx.strokeStyle = 'rgba(199, 243, 255, 0.52)';
+      ctx.lineWidth = 2.4;
+      ctx.shadowBlur = 3;
+      ctx.stroke();
     }
-    ctx.fillStyle = '#f4f7fb';
+    ctx.shadowColor = '#53c8ff';
+    ctx.shadowBlur = state.ball.active ? 15 : 8;
+    const marble = ctx.createRadialGradient(
+      state.ball.x - state.ball.radius * 0.38,
+      state.ball.y - state.ball.radius * 0.42,
+      1,
+      state.ball.x,
+      state.ball.y,
+      state.ball.radius,
+    );
+    marble.addColorStop(0, '#ffffff');
+    marble.addColorStop(0.24, '#dff8ff');
+    marble.addColorStop(0.58, '#66cfff');
+    marble.addColorStop(0.82, '#245b86');
+    marble.addColorStop(1, '#07121d');
+    ctx.fillStyle = marble;
     ctx.beginPath();
     ctx.arc(state.ball.x, state.ball.y, state.ball.radius, 0, Math.PI * 2);
     ctx.fill();
-    ctx.strokeStyle = '#55a7ff';
-    ctx.lineWidth = 3;
+    ctx.strokeStyle = '#dff8ff';
+    ctx.lineWidth = 2.5;
     ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = 'rgba(255,255,255,0.84)';
+    ctx.beginPath();
+    ctx.arc(state.ball.x - state.ball.radius * 0.32, state.ball.y - state.ball.radius * 0.36, Math.max(1.8, state.ball.radius * 0.2), 0, Math.PI * 2);
+    ctx.fill();
     ctx.restore();
   }
 
