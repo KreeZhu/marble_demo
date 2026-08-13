@@ -45,7 +45,6 @@
     levelNumber: document.querySelector('#levelNumber'),
     levelName: document.querySelector('#levelName'),
     levelFocus: document.querySelector('#levelFocus'),
-    shotCount: document.querySelector('#shotCount'),
     launcherName: document.querySelector('#launcherName'),
     launcherButtons: document.querySelector('#launcherButtons'),
     angle: document.querySelector('#angle'),
@@ -139,7 +138,6 @@
     relayLaunchers: [],
     switches: [],
     doors: [],
-    shots: 0,
     ball: null,
     obstacles: [],
     completed: false,
@@ -1033,7 +1031,6 @@
     ui.levelNumber.textContent = String(state.levelIndex + 1);
     ui.levelName.textContent = current.name;
     ui.levelFocus.textContent = current.focus;
-    ui.shotCount.textContent = String(state.shots);
     ui.launcherName.textContent = launcher.id;
     ui.openMenu.textContent = state.testLevel?.editorTest ? '回到编辑器' : '返回关卡菜单';
     ui.editCurrentLevel.textContent = state.testLevel?.editorTest ? '编辑器试玩中' : '编辑当前关卡';
@@ -1205,7 +1202,7 @@
     if (state.testLevel?.editorTest) {
       state.completionResult = {
         title: '试玩命中成功',
-        body: `草稿可以完成。你用了 ${state.shots} 次发射，可以回编辑器继续调整，也可以直接保存。`,
+        body: '草稿可以完成。可以回编辑器继续调整，也可以直接保存。',
       };
       ui.completeTitle.textContent = state.completionResult.title;
       ui.completeBody.textContent = state.completionResult.body;
@@ -1222,7 +1219,6 @@
     const result = buildCompletionResult({
       levelIndex: state.levelIndex,
       levelCount: allLevels().length,
-      shots: state.shots,
     });
     state.completedLevels.add(state.levelIndex);
     state.completionResult = result;
@@ -1263,7 +1259,6 @@
     applyMapSize(currentMapSize());
     state.ball = null;
     clearShotPaths();
-    state.shots = 0;
     state.completed = false;
     state.effects = [];
     state.successPulse = null;
@@ -1284,7 +1279,6 @@
 
   function resetAttemptRuntime() {
     state.ball = null;
-    state.shots = 0;
     state.completed = false;
     state.effects = [];
     state.successPulse = null;
@@ -1346,7 +1340,6 @@
     state.ball.originLauncherId = launcher.id;
     state.ball.launcherCooldown = 0.18;
     recordShotPoint({ x: state.ball.x, y: state.ball.y });
-    state.shots += 1;
     if (!state.shotEvents) {
       state.shotEvents = {
         wallBounces: 0,
@@ -1406,7 +1399,7 @@
     state.completed = true;
     spawnSuccessEffect();
     playSound('success');
-    setStatus(`命中 B 点，用了 ${state.shots} 次发射。`, 'var(--green)');
+    setStatus('命中 B 点。', 'var(--green)');
     showCompletionPrompt();
     syncUi();
   }
