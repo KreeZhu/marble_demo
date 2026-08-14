@@ -2383,7 +2383,7 @@
       const linkedDoors = doors.filter((door) => door.color === switchItem.color);
       linkedDoors.forEach((door, doorIndex) => {
         const pulse = 0.5 + Math.sin(performance.now() / 420 + switchIndex + doorIndex * 0.7) * 0.5;
-        const doorCenter = { x: door.x + door.width / 2, y: door.y + door.height / 2 };
+        const doorCenter = obstacleCenter(door);
         const alpha = switchItem.activated ? 0.42 + pulse * 0.28 : 0.16 + pulse * 0.18;
         ctx.save();
         ctx.strokeStyle = `rgba(255, 66, 74, ${alpha})`;
@@ -2408,43 +2408,49 @@
     doors.forEach((door, index) => {
       const active = selected && selected.type === 'door' && selected.index === index;
       const pulse = 0.5 + Math.sin(performance.now() / 380 + index * 0.9) * 0.5;
+      const width = door.width || 40;
+      const height = door.height || 176;
+      const center = obstacleCenter(door);
       ctx.save();
+      ctx.translate(center.x, center.y);
+      ctx.rotate((door.angle || 0) * Math.PI / 180);
       ctx.globalAlpha = door.open ? 0.34 : 1;
       ctx.shadowColor = art.red;
       ctx.shadowBlur = door.open ? 9 + pulse * 8 : 16 + pulse * 7;
       ctx.fillStyle = 'rgba(2, 5, 8, 0.92)';
-      roundRectPath(door.x - 5, door.y - 5, door.width + 10, door.height + 10, 5);
+      roundRectPath(-width / 2 - 5, -height / 2 - 5, width + 10, height + 10, 5);
       ctx.fill();
-      const body = ctx.createLinearGradient(door.x, door.y, door.x + door.width, door.y + door.height);
+      const body = ctx.createLinearGradient(-width / 2, -height / 2, width / 2, height / 2);
       body.addColorStop(0, door.open ? '#ffcf77' : '#ff8d7f');
       body.addColorStop(0.42, door.open ? '#ff4f45' : '#e43238');
       body.addColorStop(1, door.open ? '#741012' : '#5f0e12');
       ctx.fillStyle = body;
-      roundRectPath(door.x, door.y, door.width, door.height, 5);
+      roundRectPath(-width / 2, -height / 2, width, height, 5);
       ctx.fill();
       ctx.strokeStyle = active ? '#f4f7fb' : `rgba(255, 224, 154, ${door.open ? 0.8 : 0.48 + pulse * 0.32})`;
       ctx.lineWidth = active ? 4 : 2.5;
       ctx.stroke();
       ctx.save();
-      roundRectPath(door.x, door.y, door.width, door.height, 5);
+      roundRectPath(-width / 2, -height / 2, width, height, 5);
       ctx.clip();
       ctx.strokeStyle = door.open ? `rgba(255, 237, 196, ${0.38 + pulse * 0.28})` : 'rgba(255,255,255,0.24)';
       ctx.lineWidth = 3;
-      for (let y = door.y + 8; y < door.y + door.height; y += 22) {
+      for (let y = -height / 2 + 8; y < height / 2; y += 22) {
         ctx.beginPath();
-        ctx.moveTo(door.x + 5, y);
-        ctx.lineTo(door.x + door.width - 5, y + 13);
+        ctx.moveTo(-width / 2 + 5, y);
+        ctx.lineTo(width / 2 - 5, y + 13);
         ctx.stroke();
       }
       ctx.restore();
       ctx.fillStyle = door.open ? 'rgba(255, 215, 135, 0.2)' : 'rgba(7,18,13,0.42)';
-      ctx.fillRect(door.x + 6, door.y + 6, Math.max(4, door.width - 12), Math.max(4, door.height - 12));
+      ctx.fillRect(-width / 2 + 6, -height / 2 + 6, Math.max(4, width - 12), Math.max(4, height - 12));
       ctx.fillStyle = door.open ? '#fff2c1' : '#fff7f5';
       ctx.font = '900 10px Microsoft YaHei, Segoe UI, sans-serif';
       ctx.textAlign = 'center';
       ctx.textBaseline = 'middle';
-      ctx.fillText(door.open ? 'ON' : 'OFF', door.x + door.width / 2, door.y + door.height / 2);
+      ctx.fillText(door.open ? 'ON' : 'OFF', 0, 0);
       ctx.restore();
+      if (active) drawObstacleTransformHandles(door);
     });
   }
 
@@ -2758,7 +2764,8 @@
     const circleVisible = (obstacleVisible && object.shape === 'circle') || switchVisible;
     const angleVisible = launcherVisible ||
       (hasObject && state.editor.selected.type === 'portal') ||
-      obstacleVisible;
+      obstacleVisible ||
+      doorVisible;
     const rectVisible = (hasObject && state.editor.selected.type === 'obstacle') || doorVisible;
     const movingVisible = rectVisible && object.path;
     document.querySelectorAll('.angle-prop').forEach((node) => node.classList.toggle('hidden', !angleVisible));
@@ -2873,7 +2880,7 @@
       draft.switches.push({ id: `red-switch-${draft.switches.length + 1}`, color: 'red', x: 350, y: 300, radius: 18, activated: false, purpose: '红色按钮，被球击中后打开红色门。' });
       state.editor.selected = { type: 'switch', index: draft.switches.length - 1 };
     } else if (tool === 'redDoor') {
-      draft.doors.push({ id: `red-door-${draft.doors.length + 1}`, color: 'red', x: 560, y: 218, width: 40, height: 176, open: false, shape: 'rect', material: 'normal', purpose: '红色门，红色按钮触发后打开。' });
+      draft.doors.push({ id: `red-door-${draft.doors.length + 1}`, color: 'red', x: 560, y: 218, width: 40, height: 176, angle: 0, open: false, shape: 'rect', material: 'normal', purpose: '红色门，红色按钮触发后打开。' });
       state.editor.selected = { type: 'door', index: draft.doors.length - 1 };
     } else if (tool === 'moving') {
       draft.obstacles.push({ id: `moving-${draft.obstacles.length + 1}`, role: 'movingGate', shape: 'rect', material: 'normal', purpose: '自定义移动机关。', x: 450, y: 240, width: 110, height: 28, angle: 0, path: { x: 0, y: 130 }, speed: 1, phase: 0 });
@@ -2926,7 +2933,7 @@
     }
     for (let i = draft.doors.length - 1; i >= 0; i -= 1) {
       const door = draft.doors[i];
-      if (point.x >= door.x && point.x <= door.x + door.width && point.y >= door.y && point.y <= door.y + door.height) {
+      if (pointInRotatedRect(point, door)) {
         return { type: 'door', index: i };
       }
     }
@@ -2966,7 +2973,7 @@
   }
 
   function hitEditorTransformHandle(point) {
-    if (!state.editor.selected || state.editor.selected.type !== 'obstacle') return null;
+    if (!state.editor.selected || (state.editor.selected.type !== 'obstacle' && state.editor.selected.type !== 'door')) return null;
     const obstacle = getEditorObject();
     if (!obstacle) return null;
     const handles = obstacleTransformHandles(obstacle);
@@ -3086,6 +3093,7 @@
     if (state.editor.selected.type === 'door') {
       object.width = Number(ui.editorWidth.value);
       object.height = Number(ui.editorHeight.value);
+      object.angle = Number(ui.editorAngle.value);
     }
     if (state.editor.selected.type === 'launcher' || state.editor.selected.type === 'relay') {
       object.angle = Number(ui.editorAngle.value);
@@ -3347,7 +3355,7 @@
         beginEditorHistory();
         beginEditorTransform(point, transformHandle);
         canvas.setPointerCapture(event.pointerId);
-        setEditorStatus(transformHandle.mode === 'rotate' ? '拖动蓝色旋转手柄调整墙体角度。' : '拖动白色尺寸手柄调整墙体大小。', 'var(--amber)');
+        setEditorStatus(transformHandle.mode === 'rotate' ? '拖动蓝色旋转手柄调整角度。' : '拖动白色尺寸手柄调整大小。', 'var(--amber)');
         syncEditorUi();
         return;
       }
