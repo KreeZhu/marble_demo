@@ -34,6 +34,29 @@
     ball.launcherCooldown = Math.max(0, ball.launcherCooldown - dt);
   }
 
+  function applyGravityFields(ball, fields = [], dt = 0) {
+    if (!ball || !ball.active || !Array.isArray(fields) || dt <= 0) return false;
+    let affected = false;
+
+    fields.forEach((field) => {
+      const range = Math.max(1, Number(field.range) || 180);
+      const strength = Math.max(0, Number(field.strength) || 700);
+      const dx = field.x - ball.x;
+      const dy = field.y - ball.y;
+      const distance = Math.hypot(dx, dy);
+      if (distance <= EPSILON || distance >= range) return;
+
+      const proximity = 1 - distance / range;
+      const acceleration = strength * proximity * (0.25 + proximity * 0.75);
+      const direction = field.type === 'white' ? -1 : 1;
+      ball.vx += (dx / distance) * acceleration * dt * direction;
+      ball.vy += (dy / distance) * acceleration * dt * direction;
+      affected = true;
+    });
+
+    return affected;
+  }
+
   function resolveArenaWalls(ball, bounds, wallModes = {}, restitution = 1) {
     const modes = {
       top: 'bounce',
@@ -413,6 +436,7 @@
   const api = {
     createBall,
     stepBall,
+    applyGravityFields,
     resolveArenaWalls,
     resolveWallBounce,
     segmentCircleHit,

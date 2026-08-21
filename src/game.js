@@ -4,6 +4,7 @@
   const {
     createBall,
     stepBall,
+    applyGravityFields,
     resolveArenaWalls,
     targetHitThisFrame,
     tryTeleport,
@@ -36,7 +37,7 @@
     levelMenu: document.querySelector('#levelMenu'),
     levelGrid: document.querySelector('#levelGrid'),
     openEditor: document.querySelector('#openEditor'),
-    openMenu: document.querySelector('#openMenu'),
+    backButton: document.querySelector('#backButton'),
     editCurrentLevel: document.querySelector('#editCurrentLevel'),
     playPanel: document.querySelector('#playPanel'),
     editorPanel: document.querySelector('#editorPanel'),
@@ -69,7 +70,6 @@
     newCustomLevel: document.querySelector('#newCustomLevel'),
     saveCustomLevel: document.querySelector('#saveCustomLevel'),
     playEditedLevel: document.querySelector('#playEditedLevel'),
-    backToMenuFromEditor: document.querySelector('#backToMenuFromEditor'),
     undoEditor: document.querySelector('#undoEditor'),
     redoEditor: document.querySelector('#redoEditor'),
     editorMapSmall: document.querySelector('#editorMapSmall'),
@@ -87,6 +87,10 @@
     editorPathX: document.querySelector('#editorPathX'),
     editorPathY: document.querySelector('#editorPathY'),
     editorSpeed: document.querySelector('#editorSpeed'),
+    editorFieldRadius: document.querySelector('#editorFieldRadius'),
+    editorFieldRadiusValue: document.querySelector('#editorFieldRadiusValue'),
+    editorFieldStrength: document.querySelector('#editorFieldStrength'),
+    editorFieldStrengthValue: document.querySelector('#editorFieldStrengthValue'),
     deleteEditorObject: document.querySelector('#deleteEditorObject'),
     customLevelList: document.querySelector('#customLevelList'),
     editorStatus: document.querySelector('#editorStatus'),
@@ -126,6 +130,8 @@
     bluePortal: '#53c8ff',
     orangePortal: '#ff8a4c',
     red: '#ff4149',
+    blackHole: '#a98bff',
+    whiteHole: '#f7fbff',
     cyan: '#5ce7ff',
     ink: '#070b10',
     floor: '#0b1219',
@@ -323,6 +329,10 @@
     draft.relayLaunchers.forEach(scaleCircle);
     draft.switches.forEach(scaleCircle);
     draft.portals.forEach(scaleCircle);
+    (draft.gravityWells || []).forEach((field) => {
+      scalePosition(field);
+      field.range *= scaleRadius;
+    });
     draft.doors.forEach(scaleBox);
     draft.obstacles.forEach((obstacle) => {
       if (obstacle.shape === 'circle') scaleCircle(obstacle);
@@ -403,12 +413,22 @@
         y: door.y || 220,
         width: door.width || 38,
         height: door.height || 170,
+        angle: Number.isFinite(door.angle) ? door.angle : 0,
         shape: 'rect',
         material: 'normal',
         open: false,
         purpose: door.purpose || '红色门，红色按钮触发后打开。',
       })),
       portals: normalizePortalPairs(level.portals || []),
+      gravityWells: (level.gravityWells || []).map((field, fieldIndex) => ({
+        id: field.id || `${field.type === 'white' ? 'white' : 'black'}-hole-${fieldIndex + 1}`,
+        type: field.type === 'white' ? 'white' : 'black',
+        purpose: field.purpose || (field.type === 'white' ? '白洞只对球产生斥力。' : '黑洞只对球产生引力。'),
+        x: Number.isFinite(field.x) ? field.x : 480,
+        y: Number.isFinite(field.y) ? field.y : 300,
+        range: clamp(Number(field.range) || 220, 80, 780),
+        strength: clamp(Number(field.strength) || 900, 100, 1800),
+      })),
     };
   }
 
@@ -453,6 +473,7 @@
       switches: [],
       doors: [],
       portals: [],
+      gravityWells: [],
       arenaWalls: normalizeArenaWalls(),
     };
   }
@@ -468,6 +489,7 @@
       switches: draft.switches,
       doors: draft.doors,
       portals: draft.portals,
+      gravityWells: draft.gravityWells,
       mapSize: draft.mapSize,
       arenaWalls: draft.arenaWalls,
       requiredMechanics: [],
@@ -488,6 +510,7 @@
       switches: (level.switches || []).map((switchItem) => ({ ...switchItem, activated: false })),
       doors: (level.doors || []).map((door) => ({ ...door, open: false })),
       portals: (level.portals || []).map((portal) => ({ ...portal })),
+      gravityWells: (level.gravityWells || []).map((field) => ({ ...field })),
       arenaWalls: normalizeArenaWalls(level.arenaWalls),
     };
   }
@@ -1017,13 +1040,34 @@
       if (state.completedLevels.has(index)) button.classList.add('completed');
       if (item.custom) button.classList.add('custom');
       if (item.edited) button.classList.add('custom');
-      button.innerHTML = `<strong>${item.order}</strong><span>${item.custom ? '自定义' : item.edited ? '已编辑' : item.focus}</span>`;
+      button.title = `${item.order}. ${item.name}`;
+      button.setAttribute('aria-label', `第 ${item.order} 关：${item.name}`);
+      const number = document.createElement('strong');
+      number.textContent = String(item.order);
+      const name = document.createElement('span');
+      name.className = 'level-card-name';
+      name.textContent = item.name;
+      button.append(number, name);
       button.addEventListener('click', () => {
         ensureAudio();
         startLevel(index);
       });
       ui.levelGrid.append(button);
     });
+  }
+
+  function syncBackButton() {
+    const shouldShow = state.mode !== 'start';
+    const label = state.testLevel?.editorTest
+      ? '返回编辑器'
+      : state.mode === 'editor'
+        ? '返回关卡菜单（不保存）'
+        : state.mode === 'menu'
+          ? '返回主界面'
+          : '返回关卡菜单';
+    ui.backButton.classList.toggle('hidden', !shouldShow);
+    ui.backButton.setAttribute('aria-label', label);
+    ui.backButton.title = label;
   }
 
   function syncUi() {
@@ -1035,7 +1079,6 @@
     ui.levelName.textContent = current.name;
     ui.levelFocus.textContent = current.focus;
     ui.launcherName.textContent = launcher.id;
-    ui.openMenu.textContent = state.testLevel?.editorTest ? '回到编辑器' : '返回关卡菜单';
     ui.editCurrentLevel.textContent = state.testLevel?.editorTest ? '编辑器试玩中' : '编辑当前关卡';
     ui.editCurrentLevel.disabled = Boolean(state.testLevel?.editorTest);
     ui.angleValue.textContent = `${Math.round(launcher.angle)}°`;
@@ -1079,6 +1122,7 @@
       ui.launcherButtons.append(button);
     });
     syncLevelMenu();
+    syncBackButton();
   }
 
   function hideCompletionPrompt() {
@@ -1100,6 +1144,7 @@
     ui.shell.classList.add('menu-open');
     ui.playPanel.classList.remove('hidden');
     ui.editorPanel.classList.add('hidden');
+    syncBackButton();
   }
 
   function openLevelMenu() {
@@ -1429,6 +1474,7 @@
     if (!state.ball || !state.ball.active) return;
 
     const previous = { x: state.ball.x, y: state.ball.y };
+    applyGravityFields(state.ball, current.gravityWells || [], dt);
     stepBall(state.ball, dt);
     const targetHitDuringMovement = targetHitThisFrame(previous, state.ball, current.target, state.ball.radius, false);
     const wallResult = resolveArenaWalls(state.ball, arena, arenaWallModes(current), 0.96);
@@ -1563,6 +1609,7 @@
       const dt = 1 / 60;
       previewObstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
       const previous = { x: ball.x, y: ball.y };
+      applyGravityFields(ball, levelData.gravityWells || [], dt);
       stepBall(ball, dt);
       const wallResult = resolveArenaWalls(ball, arena, arenaWallModes(levelData), 0.96);
       if (wallResult.stuck) {
@@ -2255,6 +2302,113 @@
     });
   }
 
+  function drawGravityWells(wells = level().gravityWells || [], selected = null) {
+    const time = performance.now() / 1000;
+    wells.forEach((field, index) => {
+      const isWhite = field.type === 'white';
+      const range = Math.max(80, field.range || 220);
+      const pulse = 0.5 + Math.sin(time * 2.2 + index * 1.7) * 0.5;
+      const active = selected && selected.type === 'field' && selected.index === index;
+
+      ctx.save();
+      const influence = ctx.createRadialGradient(field.x, field.y, 20, field.x, field.y, range);
+      if (isWhite) {
+        influence.addColorStop(0, 'rgba(235, 252, 255, 0.16)');
+        influence.addColorStop(0.35, 'rgba(83, 200, 255, 0.075)');
+        influence.addColorStop(1, 'rgba(83, 200, 255, 0)');
+      } else {
+        influence.addColorStop(0, 'rgba(7, 3, 18, 0.42)');
+        influence.addColorStop(0.38, 'rgba(169, 139, 255, 0.1)');
+        influence.addColorStop(1, 'rgba(169, 139, 255, 0)');
+      }
+      ctx.fillStyle = influence;
+      ctx.beginPath();
+      ctx.arc(field.x, field.y, range, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = isWhite
+        ? `rgba(125, 231, 255, ${active ? 0.9 : 0.3 + pulse * 0.16})`
+        : `rgba(190, 139, 255, ${active ? 0.92 : 0.34 + pulse * 0.18})`;
+      ctx.lineWidth = active ? 3 : 1.5;
+      ctx.setLineDash(active ? [9, 7] : [5, 12]);
+      ctx.beginPath();
+      ctx.arc(field.x, field.y, range, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+
+      for (let arrowIndex = 0; arrowIndex < 8; arrowIndex += 1) {
+        const angle = (Math.PI * 2 * arrowIndex) / 8 + time * (isWhite ? -0.08 : 0.08);
+        const arrowRadius = range * 0.72;
+        const x = field.x + Math.cos(angle) * arrowRadius;
+        const y = field.y + Math.sin(angle) * arrowRadius;
+        const direction = isWhite ? angle : angle + Math.PI;
+        ctx.save();
+        ctx.translate(x, y);
+        ctx.rotate(direction);
+        ctx.fillStyle = isWhite ? 'rgba(184, 245, 255, 0.62)' : 'rgba(206, 168, 255, 0.62)';
+        ctx.beginPath();
+        ctx.moveTo(7, 0);
+        ctx.lineTo(-4, -4);
+        ctx.lineTo(-2, 0);
+        ctx.lineTo(-4, 4);
+        ctx.closePath();
+        ctx.fill();
+        ctx.restore();
+      }
+
+      ctx.translate(field.x, field.y);
+      ctx.rotate(time * (isWhite ? -0.34 : 0.42));
+      ctx.shadowColor = isWhite ? '#bff7ff' : '#a98bff';
+      ctx.shadowBlur = 18 + pulse * 10;
+      if (isWhite) {
+        const core = ctx.createRadialGradient(-6, -7, 2, 0, 0, 26);
+        core.addColorStop(0, '#ffffff');
+        core.addColorStop(0.32, '#dffaff');
+        core.addColorStop(0.68, '#79dfff');
+        core.addColorStop(1, 'rgba(169, 139, 255, 0.15)');
+        ctx.fillStyle = core;
+        ctx.beginPath();
+        ctx.arc(0, 0, 24 + pulse * 2, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+        ctx.lineWidth = 2;
+        for (let ray = 0; ray < 8; ray += 1) {
+          const angle = ray * Math.PI / 4;
+          ctx.beginPath();
+          ctx.moveTo(Math.cos(angle) * 28, Math.sin(angle) * 28);
+          ctx.lineTo(Math.cos(angle) * (36 + pulse * 5), Math.sin(angle) * (36 + pulse * 5));
+          ctx.stroke();
+        }
+      } else {
+        ctx.fillStyle = '#020207';
+        ctx.beginPath();
+        ctx.arc(0, 0, 23, 0, Math.PI * 2);
+        ctx.fill();
+        ctx.strokeStyle = '#b88cff';
+        ctx.lineWidth = 5;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 34 + pulse * 3, 15 + pulse, -0.24, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.strokeStyle = 'rgba(92, 231, 255, 0.78)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, 40 + pulse * 2, 20, 0.18, 0.35, Math.PI * 1.55);
+        ctx.stroke();
+      }
+      ctx.restore();
+
+      ctx.save();
+      ctx.fillStyle = isWhite ? '#effdff' : '#e2d3ff';
+      ctx.font = '900 11px Microsoft YaHei, Segoe UI, sans-serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.shadowColor = isWhite ? '#53c8ff' : '#a98bff';
+      ctx.shadowBlur = 8;
+      ctx.fillText(isWhite ? '斥' : '引', field.x, field.y + 0.5);
+      ctx.restore();
+    });
+  }
+
   function drawPortals(portals = level().portals, selected = null) {
     portals.forEach((portal, index) => {
       const color = portal.id.includes('blue') ? art.bluePortal : art.orangePortal;
@@ -2655,6 +2809,7 @@
 
   function renderGame() {
     drawArena(level());
+    drawGravityWells();
     drawLastAimPreview();
     drawPreview();
     drawFailedShotPath();
@@ -2682,6 +2837,7 @@
       phase: obstacle.phase || 0,
     }));
     drawArena(draft);
+    drawGravityWells(draft.gravityWells, state.editor.selected);
     draft.launchers.forEach((launcher, index) => {
       drawPreviewPath(simulatePreview(launcher, draft, obstacles, draft.relayLaunchers), launcherColor, 0.45);
       drawLauncherShape(launcher, launcherColor, launcher.id.replace('A', ''), selectedIs('launcher', index));
@@ -2726,6 +2882,7 @@
     if (selection.type === 'switch') return draft.switches[selection.index];
     if (selection.type === 'door') return draft.doors[selection.index];
     if (selection.type === 'portal') return draft.portals[selection.index];
+    if (selection.type === 'field') return draft.gravityWells[selection.index];
     return null;
   }
 
@@ -2738,6 +2895,7 @@
     if (selection.type === 'switch') return '红按钮';
     if (selection.type === 'door') return '红门';
     if (selection.type === 'portal') return state.editor.draft.portals[selection.index]?.id || '传送门';
+    if (selection.type === 'field') return state.editor.draft.gravityWells[selection.index]?.type === 'white' ? '白洞' : '黑洞';
     return '未选择';
   }
 
@@ -2755,12 +2913,14 @@
     ui.editorWidth.max = String(arena.width);
     ui.editorHeight.max = String(arena.height);
     ui.editorRadius.max = String(Math.round(Math.min(arena.width, arena.height) / 3));
+    ui.editorFieldRadius.max = String(Math.round(Math.min(arena.width, arena.height)));
     const hasObject = Boolean(object);
     ui.deleteEditorObject.classList.toggle('hidden', !hasObject || state.editor.selected.type === 'target');
     const launcherVisible = hasObject && (state.editor.selected.type === 'launcher' || state.editor.selected.type === 'relay');
     const obstacleVisible = hasObject && state.editor.selected.type === 'obstacle';
     const doorVisible = hasObject && state.editor.selected.type === 'door';
     const switchVisible = hasObject && state.editor.selected.type === 'switch';
+    const fieldVisible = hasObject && state.editor.selected.type === 'field';
     const circleVisible = (obstacleVisible && object.shape === 'circle') || switchVisible;
     const angleVisible = launcherVisible ||
       (hasObject && state.editor.selected.type === 'portal') ||
@@ -2774,7 +2934,8 @@
     document.querySelectorAll('.circle-prop').forEach((node) => node.classList.toggle('hidden', !circleVisible));
     document.querySelectorAll('.material-prop').forEach((node) => node.classList.toggle('hidden', !obstacleVisible));
     document.querySelectorAll('.moving-prop').forEach((node) => node.classList.toggle('hidden', !movingVisible));
-    [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed].forEach((input) => {
+    document.querySelectorAll('.field-prop').forEach((node) => node.classList.toggle('hidden', !fieldVisible));
+    [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed, ui.editorFieldRadius, ui.editorFieldStrength].forEach((input) => {
       input.disabled = !hasObject;
     });
     if (object) {
@@ -2790,10 +2951,15 @@
       ui.editorPathX.value = Math.round(object.path?.x || 0);
       ui.editorPathY.value = Math.round(object.path?.y || 0);
       ui.editorSpeed.value = Number(object.speed || 1).toFixed(1);
+      ui.editorFieldRadius.value = Math.round(object.range || 220);
+      ui.editorFieldRadiusValue.textContent = String(Math.round(object.range || 220));
+      ui.editorFieldStrength.value = Math.round(object.strength || 900);
+      ui.editorFieldStrengthValue.textContent = String(Math.round(object.strength || 900));
     }
     ui.editorTools.forEach((button) => button.classList.toggle('active', button.dataset.editorTool === state.editor.tool));
     syncEditorHistoryButtons();
     syncCustomLevelList();
+    syncBackButton();
   }
 
   function syncCustomLevelList() {
@@ -2816,7 +2982,7 @@
 
   function clampEditorObject(object) {
     if (!object) return;
-    const radius = object.radius || 0;
+    const radius = object.type === 'black' || object.type === 'white' ? 26 : object.radius || 0;
     if (object.shape === 'circle') {
       object.x = clamp(object.x, arena.x + radius, arena.x + arena.width - radius);
       object.y = clamp(object.y, arena.y + radius, arena.y + arena.height - radius);
@@ -2846,6 +3012,59 @@
     } else {
       object.x = clamp(object.x, arena.x + radius, arena.x + arena.width - radius);
       object.y = clamp(object.y, arena.y + radius, arena.y + arena.height - radius);
+    }
+  }
+
+  function editorLayoutEntries(draft = state.editor.draft) {
+    const entries = [];
+    const addCircle = (object, label, radius) => {
+      entries.push({
+        label,
+        bounds: { x: object.x - radius, y: object.y - radius, width: radius * 2, height: radius * 2 },
+      });
+    };
+    draft.launchers.forEach((launcher) => addCircle(launcher, launcher.id, 24));
+    draft.relayLaunchers.forEach((relay) => addCircle(relay, relay.id, relay.radius || 24));
+    addCircle(draft.target, 'B 目标', draft.target.radius || 18);
+    draft.switches.forEach((switchItem) => addCircle(switchItem, switchItem.id, switchItem.radius || 18));
+    draft.portals.forEach((portal) => addCircle(portal, portal.id, portal.radius || 18));
+    draft.gravityWells.forEach((field) => addCircle(field, field.type === 'white' ? '白洞' : '黑洞', 26));
+    draft.obstacles.forEach((obstacle) => entries.push({ label: obstacle.id, bounds: obstacleBounds(obstacle) }));
+    draft.doors.forEach((door) => entries.push({ label: door.id, bounds: obstacleBounds(door) }));
+    return entries;
+  }
+
+  function findEditorOverlaps(draft = state.editor.draft) {
+    const entries = editorLayoutEntries(draft);
+    const overlaps = [];
+    for (let i = 0; i < entries.length; i += 1) {
+      const a = entries[i];
+      for (let j = i + 1; j < entries.length; j += 1) {
+        const b = entries[j];
+        const padding = 3;
+        const intersects = (
+          a.bounds.x < b.bounds.x + b.bounds.width - padding &&
+          a.bounds.x + a.bounds.width > b.bounds.x + padding &&
+          a.bounds.y < b.bounds.y + b.bounds.height - padding &&
+          a.bounds.y + a.bounds.height > b.bounds.y + padding
+        );
+        if (intersects) overlaps.push(`${a.label} 与 ${b.label}`);
+      }
+    }
+    return overlaps;
+  }
+
+  function validateEditorLayout(action) {
+    const overlaps = findEditorOverlaps();
+    if (overlaps.length === 0) return true;
+    setEditorStatus(`${action}失败：${overlaps[0]}发生重叠。请先分开组件；影响范围圆可以互相交叉。`, 'var(--red)');
+    return false;
+  }
+
+  function reportEditorLayoutOverlaps() {
+    const overlaps = findEditorOverlaps();
+    if (overlaps.length > 0) {
+      setEditorStatus(`布局提醒：${overlaps[0]}发生重叠，保存或试玩前需要分开。`, 'var(--red)');
     }
   }
 
@@ -2892,10 +3111,25 @@
       draft.portals.push({ id: blueId, purpose: '自定义入口传送门。', x: 300, y: 300, radius: 18, pairId: orangeId, exitAngle: 0 });
       draft.portals.push({ id: orangeId, purpose: '自定义出口传送门。', x: 690, y: 300, radius: 18, pairId: blueId, exitAngle: 0 });
       state.editor.selected = { type: 'portal', index: draft.portals.length - 2 };
+    } else if (tool === 'blackHole' || tool === 'whiteHole') {
+      const type = tool === 'whiteHole' ? 'white' : 'black';
+      const sameTypeCount = draft.gravityWells.filter((field) => field.type === type).length;
+      const field = {
+        id: `${type}-hole-${sameTypeCount + 1}`,
+        type,
+        purpose: type === 'white' ? '白洞只对球产生斥力，使飞行路线向外偏移。' : '黑洞只对球产生引力，使飞行路线向内偏移。',
+        x: type === 'white' ? 630 : 410,
+        y: 230 + sameTypeCount * 90,
+        range: 220,
+        strength: 900,
+      };
+      draft.gravityWells.push(field);
+      state.editor.selected = { type: 'field', index: draft.gravityWells.length - 1 };
     }
     commitEditorHistory();
     state.editor.tool = tool;
     setEditorStatus(`${editorSelectionLabel()} 已添加。可以直接拖动或修改右侧数值。`, 'var(--amber)');
+    reportEditorLayoutOverlaps();
     syncEditorUi();
   }
 
@@ -2914,6 +3148,10 @@
 
   function hitEditorObject(point) {
     const draft = state.editor.draft;
+    for (let i = draft.gravityWells.length - 1; i >= 0; i -= 1) {
+      const field = draft.gravityWells[i];
+      if (Math.hypot(point.x - field.x, point.y - field.y) <= 34) return { type: 'field', index: i };
+    }
     for (let i = draft.portals.length - 1; i >= 0; i -= 1) {
       const portal = draft.portals[i];
       if (Math.hypot(point.x - portal.x, point.y - portal.y) <= portal.radius + 12) return { type: 'portal', index: i };
@@ -3102,6 +3340,12 @@
     if (state.editor.selected.type === 'portal') {
       object.exitAngle = Number(ui.editorAngle.value) * Math.PI / 180;
     }
+    if (state.editor.selected.type === 'field') {
+      object.range = Number(ui.editorFieldRadius.value);
+      object.strength = Number(ui.editorFieldStrength.value);
+      ui.editorFieldRadiusValue.textContent = String(Math.round(object.range));
+      ui.editorFieldStrengthValue.textContent = String(Math.round(object.strength));
+    }
     clampEditorObject(object);
     syncEditorUi();
   }
@@ -3135,6 +3379,9 @@
       beginEditorHistory();
       const portal = draft.portals[selection.index];
       draft.portals = draft.portals.filter((item) => item.id !== portal.id && item.id !== portal.pairId);
+    } else if (selection.type === 'field') {
+      beginEditorHistory();
+      draft.gravityWells.splice(selection.index, 1);
     }
     state.editor.selected = { type: 'launcher', index: 0 };
     commitEditorHistory();
@@ -3151,6 +3398,7 @@
       setEditorStatus('保存失败：至少需要一个 A 发射器和一个 B 目标。', 'var(--red)');
       return null;
     }
+    if (!validateEditorLayout('保存')) return null;
     if (state.editor.source?.type === 'official') {
       const index = state.editor.source.index;
       const custom = draftToLevel(draft, 0);
@@ -3205,6 +3453,7 @@
       setEditorStatus('试玩失败：至少需要一个 A 发射器和一个 B 目标。', 'var(--red)');
       return;
     }
+    if (!validateEditorLayout('试玩')) return;
     state.testLevel = draftToLevel(draft, state.customLevels.length);
     state.testLevel.name = `${draft.name}（试玩）`;
     state.testLevel.focus = '草稿试玩';
@@ -3266,9 +3515,11 @@
     ui.startExitStatus.textContent = '游戏已退出';
     window.close();
   });
-  ui.openMenu.addEventListener('click', () => {
+  ui.backButton.addEventListener('click', () => {
     if (state.testLevel?.editorTest) returnToEditorFromTest();
-    else openLevelMenu();
+    else if (state.mode === 'editor') exitEditorWithoutSaving();
+    else if (state.mode === 'play') openLevelMenu();
+    else if (state.mode === 'menu') openStartScreen();
   });
   ui.editCurrentLevel.addEventListener('click', () => openEditorForLevel(state.levelIndex));
   ui.prevLevel.addEventListener('click', () => startLevel(state.levelIndex - 1));
@@ -3336,9 +3587,8 @@
   ui.editorMapMedium.addEventListener('click', () => switchEditorMapSize('medium'));
   ui.saveCustomLevel.addEventListener('click', saveEditedLevel);
   ui.playEditedLevel.addEventListener('click', playEditedLevel);
-  ui.backToMenuFromEditor.addEventListener('click', exitEditorWithoutSaving);
   ui.deleteEditorObject.addEventListener('click', deleteEditorSelection);
-  [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed].forEach((input) => {
+  [ui.editorX, ui.editorY, ui.editorWidth, ui.editorHeight, ui.editorRadius, ui.editorMaterial, ui.editorAngle, ui.editorPower, ui.editorPathX, ui.editorPathY, ui.editorSpeed, ui.editorFieldRadius, ui.editorFieldStrength].forEach((input) => {
     input.addEventListener('input', applyEditorPropertyChange);
     input.addEventListener('change', () => {
       applyEditorPropertyChange();
@@ -3414,7 +3664,10 @@
 
   canvas.addEventListener('pointerup', (event) => {
     if (canvas.hasPointerCapture(event.pointerId)) canvas.releasePointerCapture(event.pointerId);
-    if (state.mode === 'editor') commitEditorHistory();
+    if (state.mode === 'editor') {
+      commitEditorHistory();
+      reportEditorLayoutOverlaps();
+    }
     state.draggingAim = false;
     state.dragMode = null;
     state.editor.dragging = false;
@@ -3456,7 +3709,8 @@
     } else if (!editingText && event.key === 'Escape') {
       if (state.testLevel?.editorTest) returnToEditorFromTest();
       else if (state.mode === 'editor') exitEditorWithoutSaving();
-      else openLevelMenu();
+      else if (state.mode === 'play') openLevelMenu();
+      else if (state.mode === 'menu') openStartScreen();
     } else if (!editingText && event.key === 'Delete' && state.mode === 'editor') {
       deleteEditorSelection();
     }

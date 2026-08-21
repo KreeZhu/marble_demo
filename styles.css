@@ -66,6 +66,37 @@ input {
   width: min(1760px, 100vw);
 }
 
+.back-button {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  z-index: 11;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(92, 231, 255, 0.64);
+  border-radius: 4px;
+  background: rgba(5, 16, 24, 0.84);
+  color: #edfaff;
+  cursor: pointer;
+  box-shadow: inset 0 0 16px rgba(83, 200, 255, 0.12), 0 0 18px rgba(83, 200, 255, 0.18);
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
+}
+
+.back-button span {
+  font-size: 27px;
+  line-height: 1;
+  transform: translateY(-1px);
+}
+
+.back-button:hover {
+  border-color: rgba(84, 247, 178, 0.92);
+  background: rgba(8, 47, 39, 0.9);
+  box-shadow: inset 0 0 18px rgba(84, 247, 178, 0.15), 0 0 22px rgba(84, 247, 178, 0.26);
+}
+
 .start-screen {
   position: fixed;
   inset: 0;
@@ -422,7 +453,7 @@ input {
   width: min(720px, calc(100vw - 36px));
   height: min(820px, calc(100dvh - 36px));
   overflow: hidden;
-  padding: 24px;
+  padding: 68px 24px 24px;
   border: 1px solid rgba(92, 231, 255, 0.48);
   border-radius: 5px;
   background:
@@ -457,15 +488,18 @@ input {
 }
 
 .level-grid {
+  --level-column-gap: 10px;
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-auto-rows: calc((100% - (var(--level-column-gap) * 4)) / 5);
   align-content: start;
-  gap: 10px;
+  column-gap: var(--level-column-gap);
+  row-gap: 16px;
   min-height: 0;
   overflow-x: hidden;
   overflow-y: scroll;
   overscroll-behavior-y: contain;
-  padding: 2px 8px 12px 2px;
+  padding: 12px 8px 16px 2px;
   scrollbar-color: rgba(76, 235, 255, 0.78) rgba(2, 9, 15, 0.48);
   scrollbar-gutter: stable;
   scrollbar-width: thin;
@@ -503,14 +537,16 @@ input {
 .level-card {
   position: relative;
   overflow: hidden;
-  aspect-ratio: 1;
+  width: 100%;
+  height: 100%;
+  aspect-ratio: auto;
   min-width: 0;
   display: grid;
-  grid-template-rows: minmax(0, 1fr) 2.7em;
+  grid-template-rows: minmax(0, 1fr) minmax(2.7em, auto);
   align-items: center;
   place-items: center;
-  gap: 6px;
-  padding: 10px;
+  gap: 8px;
+  padding: 12px 9px 10px;
   border: 1px solid rgba(142, 209, 237, 0.26);
   border-radius: 4px;
   background:
@@ -525,7 +561,8 @@ input {
     inset 0 -18px 24px rgba(0, 0, 0, 0.24),
     inset 0 0 18px rgba(85, 167, 255, 0.05),
     0 8px 22px rgba(0, 0, 0, 0.24);
-  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+  transform-origin: 50% 100%;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 180ms ease;
 }
 
 .level-card::before,
@@ -564,18 +601,19 @@ input {
 }
 
 .level-card span {
-  display: -webkit-box;
+  display: block;
   width: 100%;
-  min-height: 2.5em;
+  min-height: 2.7em;
   max-width: 100%;
-  overflow: hidden;
-  color: var(--muted);
-  font-size: 12px;
-  line-height: 1.25;
+  overflow: visible;
+  color: #ecfbff;
+  font-family: Bahnschrift, "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: 13px;
+  font-weight: 800;
+  line-height: 1.35;
   overflow-wrap: anywhere;
   text-align: center;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  text-shadow: 0 0 10px rgba(83, 200, 255, 0.35), 0 2px 8px rgba(0, 0, 0, 0.86);
 }
 
 .level-card.current {
@@ -606,11 +644,12 @@ input {
 
 .level-card:hover,
 .level-card:focus-visible {
+  z-index: 4;
   border-color: rgba(235, 255, 252, 0.92);
   box-shadow:
     inset 0 0 22px rgba(76, 235, 255, 0.12),
     0 0 22px rgba(76, 235, 255, 0.26);
-  transform: translateY(-2px);
+  transform: translateY(-8px) scale(1.035);
   outline: none;
 }
 
@@ -872,6 +911,10 @@ button:disabled {
   gap: 8px;
 }
 
+.actions.single-action {
+  grid-template-columns: 1fr;
+}
+
 .actions .primary {
   border-color: rgba(84, 247, 178, 0.82);
   background: var(--green);
@@ -910,10 +953,17 @@ button:disabled {
 }
 
 .tool-grid button[data-editor-tool="relay"].active,
-.tool-grid button[data-editor-tool="portal"].active {
+.tool-grid button[data-editor-tool="portal"].active,
+.tool-grid button[data-editor-tool="blackHole"].active {
   border-color: var(--purple);
   background: rgba(169, 139, 255, 0.13);
   box-shadow: inset 3px 0 0 var(--purple);
+}
+
+.tool-grid button[data-editor-tool="whiteHole"].active {
+  border-color: #e8fcff;
+  background: rgba(92, 231, 255, 0.14);
+  box-shadow: inset 3px 0 0 #e8fcff, 0 0 12px rgba(92, 231, 255, 0.18);
 }
 
 .tool-grid button[data-editor-tool="redSwitch"].active,
@@ -990,7 +1040,7 @@ button:disabled {
 .modal {
   position: fixed;
   inset: 0;
-  z-index: 10;
+  z-index: 13;
   display: grid;
   place-items: center;
   padding: 18px;
@@ -1125,9 +1175,12 @@ button:disabled {
   }
 
   .level-grid {
+    --level-column-gap: 7px;
     grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 8px;
-    padding-right: 6px;
+    grid-auto-rows: 76px;
+    column-gap: var(--level-column-gap);
+    row-gap: 13px;
+    padding: 10px 6px 14px 1px;
   }
 
   .level-grid::-webkit-scrollbar {
@@ -1135,7 +1188,14 @@ button:disabled {
   }
 
   .level-menu-panel {
-    padding: 18px;
+    padding: 60px 18px 18px;
+  }
+
+  .back-button {
+    top: 12px;
+    left: 12px;
+    width: 38px;
+    height: 38px;
   }
 
   .level-card strong {
@@ -1143,13 +1203,14 @@ button:disabled {
   }
 
   .level-card span {
-    font-size: 10px;
+    min-height: 0;
+    font-size: 9px;
+    line-height: 1.18;
   }
 
   .level-card {
-    min-height: 72px;
-    aspect-ratio: auto;
-    grid-template-rows: minmax(24px, 1fr) 2.5em;
+    min-height: 76px;
+    grid-template-rows: minmax(22px, 1fr) auto;
     gap: 3px;
     padding: 7px 4px 5px;
   }

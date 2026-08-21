@@ -476,6 +476,36 @@
     neonLoop,
   );
 
+  const gravityExperiment = {
+    order: 26,
+    name: '引斥实验场',
+    focus: '黑白洞轨迹偏转',
+    hint: '黑洞把球向紫色核心拉近，白洞把球向外推开。利用两段弯曲轨迹绕过黄色禁区。',
+    requiredMechanics: ['switchDoor', 'blackHole', 'whiteHole'],
+    arenaWalls: stickyWalls,
+    target: { x: 842, y: 166, radius: 24 },
+    launchers: [{ id: 'A1', x: 120, y: 438, angle: 0, power: 700 }],
+    solutionShots: [{ launcherId: 'A1', angle: -11 }],
+    relayLaunchers: [],
+    obstacles: [
+      { id: 'gravity-straight-trap', role: 'deadzone', material: 'sticky', purpose: '封住不利用力场的浅角直线路线，迫使玩家观察弯曲轨迹。', x: 390, y: 392, width: 190, height: 62 },
+      { id: 'gravity-upper-limit', role: 'blocker', material: 'normal', purpose: '限制过早向上瞄准的路线，让黑洞与白洞的连续偏转成为主要解法。', x: 500, y: 92, width: 170, height: 28, angle: 0 },
+    ],
+    switches: [
+      { id: 'red-switch-1', color: 'red', purpose: '位于黑洞偏转后的必经线上，先为后方红门通电。', x: 300, y: 401, radius: 18 },
+    ],
+    doors: [
+      { id: 'red-door-1', color: 'red', purpose: '封住黑洞与白洞之间的弯曲路线，要求同一颗球先触发红色按钮。', x: 520, y: 296, width: 34, height: 86, angle: 0 },
+    ],
+    portals: [],
+    gravityWells: [
+      { id: 'black-hole-1', type: 'black', purpose: '把第一段飞行向上拉弯，帮助球越过黄色直线禁区。', x: 390, y: 270, range: 250, strength: 1050 },
+      { id: 'white-hole-1', type: 'white', purpose: '从下方把第二段飞行推向右上方 B 点。', x: 650, y: 378, range: 225, strength: 1050 },
+    ],
+  };
+
+  levels.push(gravityExperiment);
+
   const api = { levels };
 
   if (typeof module !== 'undefined' && module.exports) {

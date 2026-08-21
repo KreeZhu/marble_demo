@@ -14,7 +14,7 @@ from docx.shared import Inches, Pt, RGBColor
 
 ROOT = Path(__file__).resolve().parents[1]
 SOURCE = ROOT / "docs" / "GAME_DESIGN_DOCUMENT.md"
-OUTPUT = ROOT / "docs" / "弹珠_游戏设计文档_v1.0.docx"
+OUTPUT = ROOT / "docs" / "弹珠_游戏设计文档_v1.1.docx"
 
 PAGE_WIDTH_DXA = 12240
 CONTENT_WIDTH_DXA = 9360
@@ -286,7 +286,7 @@ def setup_document() -> tuple[Document, int, int]:
     header.clear()
     left = header.add_run("《弹珠》游戏设计文档")
     set_run_font(left, size=9, color=NAVY, bold=True)
-    right = header.add_run("    规则基线 · 2026-08-13")
+    right = header.add_run("    规则基线 · 2026-08-18")
     set_run_font(right, size=9, color=MUTED)
     add_rule(header, color=LIGHT_BLUE, size=6)
     set_page_field(section.footer.paragraphs[0])
@@ -304,7 +304,7 @@ def add_cover(doc: Document) -> None:
     kicker = doc.add_paragraph()
     kicker.alignment = WD_ALIGN_PARAGRAPH.CENTER
     kicker.paragraph_format.space_after = Pt(12)
-    run = kicker.add_run("GAME DESIGN DOCUMENT · V1.0")
+    run = kicker.add_run("GAME DESIGN DOCUMENT · V1.1")
     set_run_font(run, size=10, color=GREEN, bold=True)
 
     title = doc.add_paragraph(style="Title")
@@ -337,8 +337,8 @@ def add_cover(doc: Document) -> None:
     )
 
     metadata = [
-        ("对应游戏版本", "v0.1.0 当前开发版"),
-        ("规则基线日期", "2026-08-13"),
+        ("对应游戏版本", "v0.2.0 当前开发版"),
+        ("规则基线日期", "2026-08-18"),
         ("适用对象", "策划、开发、美术、音效、测试与非开发协作者"),
         ("文档目的", "统一机制理解，并作为后续逐条确认与验收的基准"),
     ]

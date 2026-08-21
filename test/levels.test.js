@@ -5,6 +5,7 @@ const { levels } = require('../src/levels');
 const {
   createBall,
   stepBall,
+  applyGravityFields,
   resolveArenaWalls,
   targetHitThisFrame,
   tryTeleport,
@@ -100,6 +101,7 @@ function traceDefaultLauncher(level) {
       const dt = 1 / 60;
       obstacles.forEach((obstacle) => updateMovingObstacle(obstacle, dt));
       const previous = { x: ball.x, y: ball.y };
+      applyGravityFields(ball, level.gravityWells || [], dt);
       stepBall(ball, dt);
 
       const wallResult = resolveArenaWalls(ball, arena, level.arenaWalls, 0.96);
@@ -187,10 +189,41 @@ function inArenaCircle(circle) {
 }
 
 test('game has progressively numbered levels', () => {
-  assert.equal(levels.length, 25);
+  assert.equal(levels.length, 26);
   levels.forEach((level, index) => {
     assert.equal(level.order, index + 1);
   });
+});
+
+test('black holes attract and white holes repel only inside their configured range', () => {
+  const blackBall = createBall({ x: 100, y: 100, vx: 0, vy: 0 });
+  blackBall.active = true;
+  applyGravityFields(blackBall, [{ type: 'black', x: 200, y: 100, range: 150, strength: 900 }], 1 / 60);
+  assert.ok(blackBall.vx > 0);
+  assert.equal(blackBall.vy, 0);
+
+  const whiteBall = createBall({ x: 100, y: 100, vx: 0, vy: 0 });
+  whiteBall.active = true;
+  applyGravityFields(whiteBall, [{ type: 'white', x: 200, y: 100, range: 150, strength: 900 }], 1 / 60);
+  assert.ok(whiteBall.vx < 0);
+  assert.equal(whiteBall.vy, 0);
+
+  const distantBall = createBall({ x: 0, y: 0, vx: 12, vy: 34 });
+  distantBall.active = true;
+  assert.equal(applyGravityFields(distantBall, [{ type: 'black', x: 500, y: 500, range: 100, strength: 1800 }], 1 / 60), false);
+  assert.deepEqual({ vx: distantBall.vx, vy: distantBall.vy }, { vx: 12, vy: 34 });
+});
+
+test('gravity experiment includes separated black and white hole cores', () => {
+  const experiment = levels.find((level) => level.name === '引斥实验场');
+  assert.ok(experiment);
+  assert.equal(experiment.gravityWells.length, 2);
+  assert.deepEqual(experiment.gravityWells.map((field) => field.type).sort(), ['black', 'white']);
+  const [first, second] = experiment.gravityWells;
+  assert.ok(Math.hypot(first.x - second.x, first.y - second.y) > 52);
+  assert.equal(traceDefaultLauncher({ ...experiment, gravityWells: [first] }).solved, false);
+  assert.equal(traceDefaultLauncher({ ...experiment, gravityWells: [second] }).solved, false);
+  assert.equal(traceDefaultLauncher({ ...experiment, gravityWells: [] }).solved, false);
 });
 
 test('every level has one adjustable start launcher', () => {

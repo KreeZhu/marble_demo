@@ -8,10 +8,14 @@
     <meta http-equiv="Expires" content="0">
     <title>弹珠 | 霓虹机关弹球</title>
     <link rel="icon" href="data:,">
-    <link rel="stylesheet" href="styles.css?v=20260814-1">
+    <link rel="stylesheet" href="styles.css?v=20260821-1">
   </head>
   <body>
     <main class="shell">
+      <button id="backButton" class="back-button hidden" type="button" aria-label="返回上一级" title="返回上一级">
+        <span aria-hidden="true">←</span>
+      </button>
+
       <section id="startScreen" class="start-screen" aria-label="游戏开始界面">
         <div class="start-overlay"></div>
         <div class="start-content">
@@ -55,7 +59,6 @@
             <button id="nextLevel" type="button" title="下一关">›</button>
           </div>
 
-          <button id="openMenu" class="menu-button" type="button">返回关卡菜单</button>
           <button id="editCurrentLevel" class="menu-button" type="button">编辑当前关卡</button>
 
           <div class="stat-grid">
@@ -122,9 +125,8 @@
             <button id="saveCustomLevel" class="primary" type="button">保存</button>
           </div>
 
-          <div class="actions">
+          <div class="actions single-action">
             <button id="playEditedLevel" type="button">试玩当前草稿</button>
-            <button id="backToMenuFromEditor" type="button">退出编辑器（不保存）</button>
           </div>
 
           <div class="control-group">
@@ -156,6 +158,8 @@
               <button data-editor-tool="redDoor" type="button">红门</button>
               <button data-editor-tool="moving" type="button">移动机关</button>
               <button data-editor-tool="portal" type="button">传送门</button>
+              <button data-editor-tool="blackHole" type="button">黑洞</button>
+              <button data-editor-tool="whiteHole" type="button">白洞</button>
             </div>
           </div>
 
@@ -177,6 +181,22 @@
               <label class="moving-prop">移动 X<input id="editorPathX" type="number" min="-300" max="300" step="10"></label>
               <label class="moving-prop">移动 Y<input id="editorPathY" type="number" min="-300" max="300" step="10"></label>
               <label class="moving-prop">速度<input id="editorSpeed" type="number" min="0.2" max="3" step="0.1"></label>
+            </div>
+
+            <div class="field-prop control-group hidden">
+              <div class="label-row">
+                <label for="editorFieldRadius">影响半径</label>
+                <output id="editorFieldRadiusValue" for="editorFieldRadius">220</output>
+              </div>
+              <input id="editorFieldRadius" type="range" min="80" max="520" step="10" value="220">
+            </div>
+
+            <div class="field-prop control-group hidden">
+              <div class="label-row">
+                <label for="editorFieldStrength">影响力度</label>
+                <output id="editorFieldStrengthValue" for="editorFieldStrength">900</output>
+              </div>
+              <input id="editorFieldStrength" type="range" min="100" max="1800" step="50" value="900">
             </div>
 
             <button id="deleteEditorObject" class="danger" type="button">删除组件</button>
@@ -216,9 +236,9 @@
       </div>
     </main>
 
-    <script src="src/simulation.js?v=20260814-1"></script>
-    <script src="src/levels.js?v=20260814-1"></script>
-    <script src="src/progression.js?v=20260814-1"></script>
-    <script src="src/game.js?v=20260814-1"></script>
+    <script src="src/simulation.js?v=20260821-1"></script>
+    <script src="src/levels.js?v=20260821-1"></script>
+    <script src="src/progression.js?v=20260821-1"></script>
+    <script src="src/game.js?v=20260821-1"></script>
   </body>
 </html>
