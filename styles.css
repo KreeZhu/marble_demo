@@ -12,6 +12,8 @@
   --amber: #ffbd52;
   --purple: #a98bff;
   --red: #ff4149;
+  --depth-shadow: rgba(0, 0, 0, 0.72);
+  --surface-glow: rgba(92, 231, 255, 0.2);
 }
 
 * {
@@ -41,9 +43,13 @@ body::before {
   inset: 0;
   z-index: 20;
   pointer-events: none;
-  opacity: 0.12;
-  background: repeating-linear-gradient(180deg, transparent 0 3px, rgba(139, 223, 255, 0.08) 4px);
+  opacity: 0.16;
+  background:
+    linear-gradient(115deg, transparent 0 28%, rgba(92, 231, 255, 0.07) 38%, transparent 50% 68%, rgba(169, 139, 255, 0.06) 78%, transparent 88%),
+    repeating-linear-gradient(180deg, transparent 0 3px, rgba(139, 223, 255, 0.07) 4px);
+  background-size: 180% 100%, auto;
   mix-blend-mode: screen;
+  animation: ambient-scan 10s ease-in-out infinite alternate;
 }
 
 button,
@@ -86,6 +92,36 @@ input {
   transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 140ms ease;
 }
 
+.audio-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  z-index: 14;
+  display: grid;
+  width: 42px;
+  height: 42px;
+  padding: 0;
+  place-items: center;
+  border: 1px solid rgba(169, 139, 255, 0.62);
+  border-radius: 4px;
+  background: rgba(8, 10, 22, 0.84);
+  color: #f2ebff;
+  cursor: pointer;
+  box-shadow: inset 0 0 16px rgba(169, 139, 255, 0.12), 0 0 18px rgba(169, 139, 255, 0.2);
+  transition: border-color 140ms ease, background 140ms ease, box-shadow 140ms ease, transform 100ms ease;
+}
+
+.audio-toggle span {
+  font-size: 20px;
+  line-height: 1;
+}
+
+.audio-toggle.muted {
+  border-color: rgba(141, 161, 174, 0.42);
+  color: #8395a0;
+  box-shadow: inset 0 0 12px rgba(141, 161, 174, 0.08);
+}
+
 .back-button span {
   font-size: 27px;
   line-height: 1;
@@ -120,16 +156,39 @@ input {
 .start-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 3, 8, 0.2);
+  background:
+    linear-gradient(108deg, transparent 0 34%, rgba(92, 231, 255, 0.075) 46%, transparent 58%),
+    rgba(0, 3, 8, 0.26);
+  background-size: 220% 100%, auto;
   box-shadow:
     inset 0 0 180px 28px rgba(0, 0, 0, 0.82),
     inset 0 -110px 120px rgba(0, 0, 0, 0.52);
   pointer-events: none;
+  animation: start-light-sweep 8s ease-in-out infinite alternate;
 }
 
 .start-overlay::before,
 .start-overlay::after {
-  content: none;
+  content: "";
+  position: absolute;
+  pointer-events: none;
+}
+
+.start-overlay::before {
+  inset: 5%;
+  border: 1px solid rgba(92, 231, 255, 0.12);
+  box-shadow: inset 0 0 80px rgba(92, 231, 255, 0.04), 0 0 30px rgba(92, 231, 255, 0.05);
+  animation: frame-breathe 4.8s ease-in-out infinite;
+}
+
+.start-overlay::after {
+  left: 8%;
+  right: 8%;
+  bottom: 7%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, rgba(84, 247, 178, 0.62), rgba(92, 231, 255, 0.76), transparent);
+  box-shadow: 0 0 18px rgba(92, 231, 255, 0.4);
+  animation: rail-charge 3.2s ease-in-out infinite;
 }
 
 .start-content {
@@ -436,10 +495,14 @@ input {
 .level-menu::after {
   inset: 0;
   z-index: 0;
-  background: rgba(1, 5, 10, 0.26);
+  background:
+    linear-gradient(118deg, transparent 0 32%, rgba(92, 231, 255, 0.055) 45%, transparent 58% 72%, rgba(169, 139, 255, 0.05) 82%, transparent 94%),
+    rgba(1, 5, 10, 0.32);
+  background-size: 200% 100%, auto;
   box-shadow:
     inset 0 0 190px 34px rgba(0, 0, 0, 0.78),
     inset 0 -90px 120px rgba(0, 0, 0, 0.4);
+  animation: menu-light-sweep 10s ease-in-out infinite alternate;
 }
 
 .level-menu.hidden {
@@ -691,9 +754,12 @@ canvas {
   border-radius: 5px;
   background: #070b10;
   box-shadow:
-    0 22px 72px rgba(0, 0, 0, 0.58),
-    0 0 28px rgba(83, 200, 255, 0.08),
+    0 26px 0 -16px rgba(1, 4, 8, 0.9),
+    0 34px 88px rgba(0, 0, 0, 0.68),
+    0 0 36px rgba(83, 200, 255, 0.12),
     inset 0 0 0 1px rgba(237, 248, 255, 0.04);
+  transform: perspective(1200px) rotateX(0.35deg);
+  transform-origin: 50% 58%;
   touch-action: none;
 }
 
@@ -714,7 +780,9 @@ canvas {
     linear-gradient(155deg, rgba(17, 31, 40, 0.98), rgba(7, 13, 18, 0.98));
   box-shadow:
     0 20px 55px rgba(0, 0, 0, 0.42),
-    inset 0 0 42px rgba(83, 200, 255, 0.025);
+    inset 0 0 42px rgba(83, 200, 255, 0.025),
+    0 0 24px rgba(83, 200, 255, 0.055);
+  animation: panel-breathe 5.6s ease-in-out infinite;
   scrollbar-color: rgba(83, 200, 255, 0.68) rgba(2, 8, 12, 0.52);
   scrollbar-width: thin;
 }
@@ -1145,7 +1213,42 @@ button:hover {
 }
 
 button:active {
-  transform: translateY(1px);
+  filter: brightness(1.18) saturate(1.12);
+  transform: translateY(2px) scale(0.975);
+  box-shadow:
+    inset 0 3px 9px rgba(0, 0, 0, 0.58),
+    inset 0 0 18px rgba(92, 231, 255, 0.15),
+    0 0 10px rgba(92, 231, 255, 0.12);
+}
+
+@keyframes ambient-scan {
+  0% { background-position: 100% 0, 0 0; opacity: 0.1; }
+  100% { background-position: 0 0, 0 0; opacity: 0.2; }
+}
+
+@keyframes start-light-sweep {
+  0% { background-position: 100% 0, 0 0; }
+  100% { background-position: 0 0, 0 0; }
+}
+
+@keyframes menu-light-sweep {
+  0% { background-position: 100% 0, 0 0; }
+  100% { background-position: 0 0, 0 0; }
+}
+
+@keyframes frame-breathe {
+  0%, 100% { opacity: 0.36; box-shadow: inset 0 0 70px rgba(92, 231, 255, 0.025), 0 0 18px rgba(92, 231, 255, 0.04); }
+  50% { opacity: 0.84; box-shadow: inset 0 0 105px rgba(92, 231, 255, 0.075), 0 0 34px rgba(92, 231, 255, 0.1); }
+}
+
+@keyframes rail-charge {
+  0%, 100% { opacity: 0.34; transform: scaleX(0.82); }
+  50% { opacity: 0.92; transform: scaleX(1); }
+}
+
+@keyframes panel-breathe {
+  0%, 100% { border-color: rgba(92, 231, 255, 0.24); }
+  50% { border-color: rgba(92, 231, 255, 0.42); }
 }
 
 button:focus-visible,
@@ -1210,6 +1313,13 @@ button:disabled {
   .back-button {
     top: 12px;
     left: 12px;
+    width: 38px;
+    height: 38px;
+  }
+
+  .audio-toggle {
+    top: 12px;
+    right: 12px;
     width: 38px;
     height: 38px;
   }
@@ -1296,6 +1406,12 @@ button:disabled {
 }
 
 @media (prefers-reduced-motion: reduce) {
+  body::before,
+  .start-overlay,
+  .start-overlay::before,
+  .start-overlay::after,
+  .level-menu::after,
+  .panel,
   .game-logo,
   .logo-rail,
   .logo-marble {

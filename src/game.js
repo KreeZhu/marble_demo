@@ -38,6 +38,7 @@
     levelGrid: document.querySelector('#levelGrid'),
     openEditor: document.querySelector('#openEditor'),
     backButton: document.querySelector('#backButton'),
+    audioToggle: document.querySelector('#audioToggle'),
     editCurrentLevel: document.querySelector('#editCurrentLevel'),
     playPanel: document.querySelector('#playPanel'),
     editorPanel: document.querySelector('#editorPanel'),
@@ -161,8 +162,10 @@
     lastTime: 0,
     physicsAccumulator: 0,
     effects: [],
+    impactLights: [],
     successPulse: null,
     lastImpactSoundAt: 0,
+    lastImpactLightAt: 0,
     completionResult: null,
     shotEvents: null,
     activeShotPath: [],
@@ -193,6 +196,13 @@
     output: null,
     reverb: null,
     reverbGain: null,
+    musicGain: null,
+    musicFilter: null,
+    musicTimer: null,
+    musicMode: 'menu',
+    musicStep: 0,
+    nextMusicTime: 0,
+    muted: window.localStorage.getItem('pinballSandboxAudioMuted.v1') === 'true',
     noiseSeed: 0x3a7f29c1,
   };
 
@@ -557,6 +567,7 @@
       if (Math.hypot(ball.x - switchItem.x, ball.y - switchItem.y) <= switchItem.radius + ball.radius) {
         if (triggerSwitch(switchItem, doors)) {
           hit = true;
+          spawnImpactLight(switchItem.x, switchItem.y, art.red, 1.25, 150);
           if (events) events.switchHits.add(switchItem.id);
         }
       }
@@ -808,6 +819,15 @@
       audio.compressor.connect(audio.output);
       audio.output.connect(context.destination);
 
+      audio.musicFilter = context.createBiquadFilter();
+      audio.musicFilter.type = 'lowpass';
+      audio.musicFilter.frequency.value = 2400;
+      audio.musicFilter.Q.value = 0.65;
+      audio.musicGain = context.createGain();
+      audio.musicGain.gain.value = 0.11;
+      audio.musicFilter.connect(audio.musicGain);
+      audio.musicGain.connect(audio.master);
+
       if (context.createConvolver) {
         const duration = 1.45;
         const length = Math.floor(context.sampleRate * duration);
@@ -833,6 +853,9 @@
     }
     if (audio.context.state === 'suspended') audio.context.resume();
     audio.unlocked = true;
+    audio.master.gain.setTargetAtTime(audio.muted ? 0.0001 : 0.88, audio.context.currentTime, 0.025);
+    startMusicEngine();
+    syncAudioToggle();
     return audio.context;
   }
 
@@ -951,8 +974,134 @@
     source.stop(end + 0.02);
   }
 
+  function playMusicTone({
+    frequency,
+    startTime,
+    duration = 0.36,
+    gain = 0.04,
+    type = 'triangle',
+    endFrequency,
+    pan = 0,
+    wet = 0.5,
+  }) {
+    const context = audio.context;
+    if (!context || !audio.musicFilter || audio.muted) return;
+    const end = startTime + duration;
+    const oscillator = context.createOscillator();
+    const filter = context.createBiquadFilter();
+    const volume = context.createGain();
+    oscillator.type = type;
+    oscillator.frequency.setValueAtTime(Math.max(20, frequency), startTime);
+    if (endFrequency) oscillator.frequency.exponentialRampToValueAtTime(Math.max(20, endFrequency), end);
+    filter.type = 'lowpass';
+    filter.frequency.value = audio.musicMode === 'game' ? 1800 : 1250;
+    filter.Q.value = 0.7;
+    volume.gain.setValueAtTime(0.0001, startTime);
+    volume.gain.exponentialRampToValueAtTime(Math.max(0.0002, gain), startTime + Math.min(0.08, duration * 0.24));
+    volume.gain.exponentialRampToValueAtTime(0.0001, end);
+    oscillator.connect(filter);
+    filter.connect(volume);
+    let output = volume;
+    if (context.createStereoPanner) {
+      const panner = context.createStereoPanner();
+      panner.pan.value = clamp(pan, -1, 1);
+      volume.connect(panner);
+      output = panner;
+    }
+    output.connect(audio.musicFilter);
+    if (audio.reverb && wet > 0) {
+      const send = context.createGain();
+      send.gain.value = wet;
+      output.connect(send);
+      send.connect(audio.reverb);
+    }
+    oscillator.start(startTime);
+    oscillator.stop(end + 0.04);
+  }
+
+  function scheduleMusicStep(step, time) {
+    if (audio.musicMode === 'game') {
+      const pulseNotes = [110, 146.83, 164.81, 146.83, 123.47, 164.81, 196, 164.81];
+      const note = pulseNotes[step % pulseNotes.length];
+      playMusicTone({ frequency: note, startTime: time, duration: 0.24, gain: 0.026, type: 'sawtooth', pan: step % 2 ? 0.16 : -0.16, wet: 0.24 });
+      if (step % 4 === 0) {
+        playMusicTone({ frequency: step % 8 === 0 ? 55 : 61.74, startTime: time, duration: 0.52, gain: 0.052, type: 'sine', wet: 0.18 });
+      }
+      if (step % 8 === 6) {
+        playMusicTone({ frequency: 659.25, startTime: time, duration: 0.34, gain: 0.018, type: 'sine', pan: 0.35, wet: 0.72 });
+      }
+      return;
+    }
+
+    const ambientNotes = [146.83, 174.61, 220, 261.63, 220, 174.61, 164.81, 196];
+    const note = ambientNotes[step % ambientNotes.length];
+    playMusicTone({ frequency: note, startTime: time, duration: 0.72, gain: 0.028, type: 'triangle', pan: Math.sin(step * 0.8) * 0.32, wet: 0.76 });
+    if (step % 4 === 0) {
+      playMusicTone({ frequency: step % 8 === 0 ? 73.42 : 82.41, startTime: time, duration: 1.45, gain: 0.038, type: 'sine', wet: 0.82 });
+    }
+  }
+
+  function pumpMusic() {
+    const context = audio.context;
+    if (!context || !audio.unlocked || audio.muted || context.state !== 'running') return;
+    if (audio.nextMusicTime < context.currentTime - 0.2) audio.nextMusicTime = context.currentTime + 0.06;
+    const stepDuration = audio.musicMode === 'game' ? 60 / 104 / 2 : 60 / 76 / 2;
+    while (audio.nextMusicTime < context.currentTime + 0.32) {
+      scheduleMusicStep(audio.musicStep, audio.nextMusicTime);
+      audio.musicStep += 1;
+      audio.nextMusicTime += stepDuration;
+    }
+  }
+
+  function startMusicEngine() {
+    if (!audio.context || audio.musicTimer) return;
+    audio.nextMusicTime = audio.context.currentTime + 0.08;
+    audio.musicTimer = window.setInterval(pumpMusic, 100);
+    pumpMusic();
+  }
+
+  function setMusicMode(mode) {
+    const normalized = mode === 'game' ? 'game' : 'menu';
+    if (audio.musicMode === normalized) return;
+    audio.musicMode = normalized;
+    audio.musicStep = 0;
+    if (audio.context) {
+      audio.nextMusicTime = audio.context.currentTime + 0.12;
+      audio.musicFilter.frequency.setTargetAtTime(normalized === 'game' ? 2600 : 1750, audio.context.currentTime, 0.18);
+      audio.musicGain.gain.setTargetAtTime(normalized === 'game' ? 0.105 : 0.12, audio.context.currentTime, 0.2);
+    }
+  }
+
+  function syncAudioToggle() {
+    if (!ui.audioToggle) return;
+    const label = audio.muted ? '开启声音' : '关闭声音';
+    ui.audioToggle.classList.toggle('muted', audio.muted);
+    ui.audioToggle.setAttribute('aria-label', label);
+    ui.audioToggle.title = label;
+    const icon = ui.audioToggle.querySelector('span');
+    if (icon) icon.textContent = audio.muted ? '—' : '♫';
+  }
+
+  function setAudioMuted(muted) {
+    audio.muted = Boolean(muted);
+    window.localStorage.setItem('pinballSandboxAudioMuted.v1', String(audio.muted));
+    const context = ensureAudio();
+    if (context && audio.master) {
+      audio.master.gain.cancelScheduledValues(context.currentTime);
+      audio.master.gain.setTargetAtTime(audio.muted ? 0.0001 : 0.88, context.currentTime, 0.035);
+      if (!audio.muted) {
+        audio.nextMusicTime = context.currentTime + 0.08;
+        pumpMusic();
+      }
+    }
+    syncAudioToggle();
+  }
+
   function playSound(name) {
-    if (name === 'shoot') {
+    if (name === 'ui') {
+      playTone({ frequency: 620, endFrequency: 420, duration: 0.055, type: 'triangle', gain: 0.025, filterFrequency: 2400, wet: 0.12 });
+      playTone({ frequency: 980, endFrequency: 720, start: 0.012, duration: 0.045, type: 'sine', gain: 0.014, pan: 0.12, wet: 0.2 });
+    } else if (name === 'shoot') {
       playNoiseBurst({ duration: 0.045, gain: 0.18, filterFrequency: 1900, endFilterFrequency: 720, resonance: 1.6, pan: -0.12, wet: 0.08 });
       playTone({ frequency: 760, endFrequency: 170, duration: 0.12, type: 'square', gain: 0.12, filterFrequency: 2200, endFilterFrequency: 620, resonance: 1.3, pan: -0.08, wet: 0.18 });
       playTone({ frequency: 132, endFrequency: 58, start: 0.006, duration: 0.27, type: 'sine', gain: 0.19, filterFrequency: 320, pan: 0, wet: 0.12 });
@@ -1132,6 +1281,7 @@
 
   function openStartScreen() {
     state.mode = 'start';
+    setMusicMode('menu');
     state.testLevel = null;
     state.draggingAim = false;
     state.ball = null;
@@ -1149,6 +1299,7 @@
 
   function openLevelMenu() {
     state.mode = 'menu';
+    setMusicMode('menu');
     state.testLevel = null;
     state.draggingAim = false;
     state.ball = null;
@@ -1165,6 +1316,7 @@
 
   function startLevel(index) {
     state.mode = 'play';
+    setMusicMode('game');
     state.testLevel = null;
     ui.startScreen.classList.add('hidden');
     ui.levelMenu.classList.add('hidden');
@@ -1177,6 +1329,7 @@
 
   function openEditor(levelId = null) {
     state.mode = 'editor';
+    setMusicMode('game');
     state.testLevel = null;
     state.ball = null;
     clearShotPaths();
@@ -1220,6 +1373,7 @@
       return;
     }
     state.mode = 'editor';
+    setMusicMode('game');
     state.testLevel = null;
     state.ball = null;
     clearShotPaths();
@@ -1287,6 +1441,7 @@
   function spawnSuccessEffect() {
     const target = level().target;
     state.successPulse = { x: target.x, y: target.y, age: 0, duration: 0.9 };
+    spawnImpactLight(target.x, target.y, art.target, 1.65, 240);
     for (let i = 0; i < 34; i += 1) {
       const angle = (Math.PI * 2 * i) / 34;
       const speed = 90 + (i % 7) * 22;
@@ -1309,6 +1464,7 @@
     clearShotPaths();
     state.completed = false;
     state.effects = [];
+    state.impactLights = [];
     state.successPulse = null;
     state.launchers = cloneLevelLaunchers(level());
     state.relayLaunchers = cloneRelayLaunchers(level());
@@ -1329,6 +1485,7 @@
     state.ball = null;
     state.completed = false;
     state.effects = [];
+    state.impactLights = [];
     state.successPulse = null;
     state.obstacles = cloneLevelObstacles(level());
     state.switches = cloneSwitches(level());
@@ -1462,6 +1619,8 @@
       effect.vy += 180 * dt;
     });
     state.effects = state.effects.filter((effect) => effect.age < effect.duration);
+    state.impactLights.forEach((light) => { light.age += dt; });
+    state.impactLights = state.impactLights.filter((light) => light.age < light.duration);
     if (state.successPulse) {
       state.successPulse.age += dt;
       if (state.successPulse.age >= state.successPulse.duration) state.successPulse = null;
@@ -1480,8 +1639,13 @@
     const wallResult = resolveArenaWalls(state.ball, arena, arenaWallModes(current), 0.96);
     const wallBounced = wallResult.bounced;
     if (wallBounced && state.shotEvents) state.shotEvents.wallBounces += 1;
+    if (wallBounced && performance.now() - state.lastImpactLightAt > 45) {
+      state.lastImpactLightAt = performance.now();
+      spawnImpactLight(state.ball.x, state.ball.y, art.cyan, 0.92, 125);
+    }
 
     if (wallResult.stuck) {
+      spawnImpactLight(state.ball.x, state.ball.y, art.sticky, 1.15, 145);
       if (targetHitDuringMovement) {
         completeCurrentLevel();
         return;
@@ -1495,6 +1659,7 @@
     let stickyHit = false;
     let boostHit = false;
     let normalObstacleHit = false;
+    let impactColor = null;
     state.obstacles.concat(activeDoorObstacles()).forEach((obstacle) => {
       const hitObstacle = resolveShapedObstacleBounce(state.ball, obstacle, obstacleRestitution(obstacle));
       if (hitObstacle && state.shotEvents) {
@@ -1505,8 +1670,24 @@
       if (hitObstacle && obstacle.material === 'sticky') stickyHit = true;
       if (hitObstacle && obstacle.material === 'boost') boostHit = true;
       if (hitObstacle && obstacle.material !== 'boost' && obstacle.material !== 'sticky') normalObstacleHit = true;
+      if (hitObstacle && !impactColor) {
+        impactColor = obstacle.role === 'door'
+          ? art.red
+          : obstacle.material === 'boost'
+            ? art.boostCore
+            : obstacle.material === 'sticky'
+              ? art.sticky
+              : obstacle.path
+                ? art.moving
+                : art.cyan;
+      }
       obstacleBounced = hitObstacle || obstacleBounced;
     });
+
+    if (impactColor && performance.now() - state.lastImpactLightAt > 45) {
+      state.lastImpactLightAt = performance.now();
+      spawnImpactLight(state.ball.x, state.ball.y, impactColor, boostHit ? 1.22 : 0.96, boostHit ? 155 : 125);
+    }
 
     if (stickyHit) {
       if (targetHitDuringMovement) {
@@ -1523,6 +1704,10 @@
     const beforePortal = { x: state.ball.x, y: state.ball.y };
     const teleported = tryTeleport(state.ball, current.portals);
     if (teleported) recordShotPoint(beforePortal);
+    if (teleported) {
+      spawnImpactLight(beforePortal.x, beforePortal.y, art.bluePortal, 1.15, 165);
+      spawnImpactLight(state.ball.x, state.ball.y, art.orangePortal, 1.2, 175);
+    }
     if (teleported && state.shotEvents) {
       const entry = current.portals.find((portal) => (
         Math.hypot(beforePortal.x - portal.x, beforePortal.y - portal.y) <= portal.radius + state.ball.radius
@@ -1553,6 +1738,7 @@
       }
       clearActiveShotPath();
       playSound('relay');
+      spawnImpactLight(capturedLauncher.x, capturedLauncher.y, relayColor, 1.28, 165);
       state.effects.push({ x: capturedLauncher.x, y: capturedLauncher.y, vx: 0, vy: 0, age: 0, duration: 0.42, radius: 18, color: relayColor });
       setStatus(`${capturedLauncher.id} 接住了球。开关和门保持当前状态，请重新瞄准后再次发射。`, 'var(--green)');
       syncControlsFromLauncher();
@@ -1659,6 +1845,79 @@
     ctx.closePath();
   }
 
+  function spawnImpactLight(x, y, color = art.cyan, strength = 1, radius = 130) {
+    state.impactLights.push({
+      x,
+      y,
+      color,
+      strength,
+      radius,
+      age: 0,
+      duration: 0.46 + Math.min(0.34, strength * 0.12),
+    });
+    if (state.impactLights.length > 18) state.impactLights.shift();
+  }
+
+  function ballProximity(x, y, radius = 180) {
+    if (!state.ball || state.mode === 'editor') return 0;
+    return clamp(1 - Math.hypot(state.ball.x - x, state.ball.y - y) / radius, 0, 1);
+  }
+
+  function ballProximityToBounds(bounds, radius = 180) {
+    if (!state.ball || state.mode === 'editor') return 0;
+    const closestX = clamp(state.ball.x, bounds.x, bounds.x + bounds.width);
+    const closestY = clamp(state.ball.y, bounds.y, bounds.y + bounds.height);
+    return clamp(1 - Math.hypot(state.ball.x - closestX, state.ball.y - closestY) / radius, 0, 1);
+  }
+
+  function drawDynamicFloorLight() {
+    ctx.save();
+    ctx.beginPath();
+    ctx.rect(arena.x, arena.y, arena.width, arena.height);
+    ctx.clip();
+    ctx.globalCompositeOperation = 'screen';
+
+    if (state.ball && state.mode !== 'editor') {
+      const radius = state.ball.active ? 175 : 115;
+      const glow = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, radius);
+      glow.addColorStop(0, state.ball.active ? 'rgba(83, 200, 255, 0.18)' : 'rgba(84, 247, 178, 0.12)');
+      glow.addColorStop(0.38, 'rgba(83, 200, 255, 0.07)');
+      glow.addColorStop(1, 'rgba(83, 200, 255, 0)');
+      ctx.fillStyle = glow;
+      ctx.fillRect(state.ball.x - radius, state.ball.y - radius, radius * 2, radius * 2);
+    }
+
+    state.impactLights.forEach((light) => {
+      const progress = light.age / light.duration;
+      const alpha = Math.pow(1 - progress, 1.6) * light.strength;
+      const radius = light.radius * (0.72 + progress * 0.48);
+      const glow = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, radius);
+      glow.addColorStop(0, `${light.color}${Math.round(clamp(alpha * 0.38, 0, 0.72) * 255).toString(16).padStart(2, '0')}`);
+      glow.addColorStop(0.32, `${light.color}${Math.round(clamp(alpha * 0.17, 0, 0.42) * 255).toString(16).padStart(2, '0')}`);
+      glow.addColorStop(1, `${light.color}00`);
+      ctx.fillStyle = glow;
+      ctx.fillRect(light.x - radius, light.y - radius, radius * 2, radius * 2);
+    });
+    ctx.restore();
+  }
+
+  function drawImpactBursts() {
+    ctx.save();
+    ctx.globalCompositeOperation = 'screen';
+    state.impactLights.forEach((light) => {
+      const progress = light.age / light.duration;
+      const alpha = Math.pow(1 - progress, 1.35) * light.strength;
+      ctx.strokeStyle = `${light.color}${Math.round(clamp(alpha * 0.74, 0, 0.9) * 255).toString(16).padStart(2, '0')}`;
+      ctx.lineWidth = Math.max(1, 4.5 * (1 - progress));
+      ctx.shadowColor = light.color;
+      ctx.shadowBlur = 20 * (1 - progress);
+      ctx.beginPath();
+      ctx.arc(light.x, light.y, 12 + progress * light.radius * 0.46, 0, Math.PI * 2);
+      ctx.stroke();
+    });
+    ctx.restore();
+  }
+
   function traceObstacleShape(obstacle) {
     ctx.beginPath();
     if (obstacle.shape === 'circle') {
@@ -1685,30 +1944,47 @@
 
   function drawGrid() {
     ctx.save();
-    ctx.strokeStyle = 'rgba(92, 231, 255, 0.045)';
+    ctx.beginPath();
+    ctx.rect(arena.x, arena.y, arena.width, arena.height);
+    ctx.clip();
+    const centerX = arena.x + arena.width / 2;
+    const topCompression = 0.82;
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.052)';
     ctx.lineWidth = 1;
-    for (let x = arena.x; x <= arena.x + arena.width; x += 24) {
+    const columns = Math.max(18, Math.round(arena.width / 44));
+    for (let column = 0; column <= columns; column += 1) {
+      const fraction = column / columns;
+      const bottomX = arena.x + arena.width * fraction;
+      const topX = centerX + (fraction - 0.5) * arena.width * topCompression;
       ctx.beginPath();
-      ctx.moveTo(x, arena.y);
-      ctx.lineTo(x, arena.y + arena.height);
+      ctx.moveTo(topX, arena.y);
+      ctx.lineTo(bottomX, arena.y + arena.height);
       ctx.stroke();
     }
-    for (let y = arena.y; y <= arena.y + arena.height; y += 24) {
+    const rows = Math.max(12, Math.round(arena.height / 34));
+    for (let row = 0; row <= rows; row += 1) {
+      const fraction = row / rows;
+      const perspective = Math.pow(fraction, 1.34);
+      const y = arena.y + arena.height * perspective;
       ctx.beginPath();
       ctx.moveTo(arena.x, y);
       ctx.lineTo(arena.x + arena.width, y);
       ctx.stroke();
     }
 
-    ctx.strokeStyle = 'rgba(92, 231, 255, 0.105)';
+    ctx.strokeStyle = 'rgba(92, 231, 255, 0.12)';
     ctx.lineWidth = 1.25;
-    for (let x = arena.x; x <= arena.x + arena.width; x += 96) {
+    for (let column = 0; column <= columns; column += 4) {
+      const fraction = column / columns;
+      const bottomX = arena.x + arena.width * fraction;
+      const topX = centerX + (fraction - 0.5) * arena.width * topCompression;
       ctx.beginPath();
-      ctx.moveTo(x, arena.y);
-      ctx.lineTo(x, arena.y + arena.height);
+      ctx.moveTo(topX, arena.y);
+      ctx.lineTo(bottomX, arena.y + arena.height);
       ctx.stroke();
     }
-    for (let y = arena.y; y <= arena.y + arena.height; y += 96) {
+    for (let row = 0; row <= rows; row += 4) {
+      const y = arena.y + arena.height * Math.pow(row / rows, 1.34);
       ctx.beginPath();
       ctx.moveTo(arena.x, y);
       ctx.lineTo(arena.x + arena.width, y);
@@ -1767,11 +2043,35 @@
     const lineWidth = sticky ? 10 : 7;
     const x1 = side === 'right' ? arena.x + arena.width : arena.x;
     const y1 = side === 'bottom' ? arena.y + arena.height : arena.y;
+    const wallDistance = !state.ball || state.mode === 'editor'
+      ? Number.POSITIVE_INFINITY
+      : side === 'top'
+        ? Math.abs(state.ball.y - arena.y)
+        : side === 'bottom'
+          ? Math.abs(state.ball.y - (arena.y + arena.height))
+          : side === 'left'
+            ? Math.abs(state.ball.x - arena.x)
+            : Math.abs(state.ball.x - (arena.x + arena.width));
+    const proximity = clamp(1 - wallDistance / 170, 0, 1);
 
     ctx.save();
     ctx.lineCap = 'round';
-    ctx.shadowColor = glow;
-    ctx.shadowBlur = sticky ? 12 : 4;
+    ctx.strokeStyle = 'rgba(0, 2, 5, 0.9)';
+    ctx.lineWidth = lineWidth + 10;
+    ctx.beginPath();
+    if (side === 'top' || side === 'bottom') {
+      const depthOffset = side === 'bottom' ? 8 : 5;
+      ctx.moveTo(arena.x, y1 + depthOffset);
+      ctx.lineTo(arena.x + arena.width, y1 + depthOffset);
+    } else {
+      const depthOffset = side === 'right' ? 8 : 5;
+      ctx.moveTo(x1 + depthOffset, arena.y);
+      ctx.lineTo(x1 + depthOffset, arena.y + arena.height);
+    }
+    ctx.stroke();
+
+    ctx.shadowColor = proximity > 0 ? (sticky ? art.sticky : art.cyan) : glow;
+    ctx.shadowBlur = (sticky ? 12 : 4) + proximity * 34;
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
@@ -1783,6 +2083,24 @@
       ctx.lineTo(x1, arena.y + arena.height);
     }
     ctx.stroke();
+
+    if (proximity > 0 && state.ball) {
+      const reactive = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, 180);
+      reactive.addColorStop(0, sticky ? `rgba(255, 226, 112, ${0.38 + proximity * 0.48})` : `rgba(205, 248, 255, ${0.32 + proximity * 0.5})`);
+      reactive.addColorStop(0.48, sticky ? `rgba(242, 200, 75, ${proximity * 0.28})` : `rgba(92, 231, 255, ${proximity * 0.24})`);
+      reactive.addColorStop(1, 'rgba(0,0,0,0)');
+      ctx.strokeStyle = reactive;
+      ctx.lineWidth = lineWidth + 3;
+      ctx.beginPath();
+      if (side === 'top' || side === 'bottom') {
+        ctx.moveTo(arena.x, y1);
+        ctx.lineTo(arena.x + arena.width, y1);
+      } else {
+        ctx.moveTo(x1, arena.y);
+        ctx.lineTo(x1, arena.y + arena.height);
+      }
+      ctx.stroke();
+    }
 
     if (sticky) {
       ctx.shadowBlur = 0;
@@ -1822,14 +2140,22 @@
     background.addColorStop(1, '#05070a');
     ctx.fillStyle = background;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.fillStyle = 'rgba(0, 2, 5, 0.92)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.9)';
+    ctx.shadowBlur = 28;
+    ctx.fillRect(arena.x + 10, arena.y + 13, arena.width, arena.height);
+    ctx.restore();
     const floor = ctx.createLinearGradient(arena.x, arena.y, arena.x, arena.y + arena.height);
-    floor.addColorStop(0, '#111b24');
-    floor.addColorStop(0.5, '#0b141c');
-    floor.addColorStop(1, '#080f15');
+    floor.addColorStop(0, '#15232e');
+    floor.addColorStop(0.18, '#101c26');
+    floor.addColorStop(0.62, '#0a141d');
+    floor.addColorStop(1, '#071017');
     ctx.fillStyle = floor;
     ctx.fillRect(arena.x, arena.y, arena.width, arena.height);
     drawGrid();
     drawFloorDetails();
+    drawDynamicFloorLight();
     const vignette = ctx.createRadialGradient(
       arena.x + arena.width / 2,
       arena.y + arena.height / 2,
@@ -1851,11 +2177,12 @@
   function drawTarget(target = level().target, selected = false) {
     const pulse = 0.5 + Math.sin(performance.now() / 260) * 0.5;
     const spin = performance.now() / 1300;
+    const proximity = ballProximity(target.x, target.y, 210);
     ctx.save();
     ctx.translate(target.x, target.y);
     ctx.shadowColor = art.target;
-    ctx.shadowBlur = selected ? 26 : 12 + pulse * 5;
-    ctx.fillStyle = `rgba(84, 247, 178, ${selected ? 0.24 : 0.08 + pulse * 0.04})`;
+    ctx.shadowBlur = selected ? 26 : 12 + pulse * 5 + proximity * 34;
+    ctx.fillStyle = `rgba(84, 247, 178, ${selected ? 0.24 : 0.08 + pulse * 0.04 + proximity * 0.2})`;
     ctx.beginPath();
     ctx.arc(0, 0, target.radius + 19, 0, Math.PI * 2);
     ctx.fill();
@@ -1901,10 +2228,11 @@
   function drawLauncherShape(launcher, color, label, active = false) {
     const radians = launcher.angle * Math.PI / 180;
     const spin = performance.now() / 900;
+    const proximity = ballProximity(launcher.x, launcher.y, 190);
     ctx.save();
     ctx.shadowColor = color;
-    ctx.shadowBlur = active ? 22 : 9;
-    ctx.fillStyle = active ? `${color}22` : 'rgba(244,247,251,0.05)';
+    ctx.shadowBlur = (active ? 22 : 9) + proximity * 28;
+    ctx.fillStyle = active ? `${color}22` : proximity > 0 ? `${color}${Math.round(proximity * 42).toString(16).padStart(2, '0')}` : 'rgba(244,247,251,0.05)';
     ctx.beginPath();
     ctx.arc(launcher.x, launcher.y, active ? 30 : 25, 0, Math.PI * 2);
     ctx.fill();
@@ -2158,6 +2486,16 @@
     const bounds = obstacleBounds(obstacle);
     const isBoost = obstacle.material === 'boost';
     const isSticky = obstacle.material === 'sticky';
+    const proximity = ballProximityToBounds(bounds, 190);
+    const reactiveColor = isBoost ? art.boostCore : isSticky ? art.sticky : obstacle.path ? art.moving : art.cyan;
+    ctx.save();
+    ctx.translate(8, 10);
+    ctx.fillStyle = 'rgba(0, 2, 5, 0.78)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.86)';
+    ctx.shadowBlur = 12;
+    traceObstacleShape(obstacle);
+    ctx.fill();
+    ctx.restore();
     ctx.save();
     ctx.strokeStyle = 'rgba(2, 5, 8, 0.92)';
     ctx.lineWidth = isSticky ? 9 : 7;
@@ -2174,7 +2512,23 @@
     ctx.fill();
     ctx.strokeStyle = isBoost ? 'rgba(105, 255, 160, 0.92)' : isSticky ? 'rgba(255, 224, 100, 0.92)' : 'rgba(207, 232, 244, 0.48)';
     ctx.lineWidth = isSticky ? 3.5 : 2.5;
+    ctx.shadowColor = reactiveColor;
+    ctx.shadowBlur = proximity * 30;
     ctx.stroke();
+
+    if (proximity > 0 && state.ball) {
+      ctx.save();
+      traceObstacleShape(obstacle);
+      ctx.clip();
+      ctx.globalCompositeOperation = 'screen';
+      const reactive = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, 175);
+      reactive.addColorStop(0, `${reactiveColor}${Math.round((0.3 + proximity * 0.5) * 255).toString(16).padStart(2, '0')}`);
+      reactive.addColorStop(0.42, `${reactiveColor}${Math.round(proximity * 0.2 * 255).toString(16).padStart(2, '0')}`);
+      reactive.addColorStop(1, `${reactiveColor}00`);
+      ctx.fillStyle = reactive;
+      ctx.fillRect(bounds.x - 180, bounds.y - 180, bounds.width + 360, bounds.height + 360);
+      ctx.restore();
+    }
 
     ctx.save();
     traceObstacleShape(obstacle);
@@ -2288,8 +2642,9 @@
         ctx.arc(originX + centerOffsetX + obstacle.path.x, originY + centerOffsetY + obstacle.path.y, 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      ctx.shadowColor = obstacle.material === 'boost' ? art.boost : obstacle.material === 'sticky' ? art.sticky : (moving ? art.moving : '#000');
-      ctx.shadowBlur = obstacle.material === 'boost' ? 15 : obstacle.material === 'sticky' ? 10 : (moving ? 10 : 3);
+      const proximity = ballProximityToBounds(bounds, 190);
+      ctx.shadowColor = obstacle.material === 'boost' ? art.boost : obstacle.material === 'sticky' ? art.sticky : (moving ? art.moving : art.cyan);
+      ctx.shadowBlur = (obstacle.material === 'boost' ? 15 : obstacle.material === 'sticky' ? 10 : (moving ? 10 : 3)) + proximity * 24;
       drawObstacleShape(obstacle, obstacleColor(obstacle));
       if (active) {
         ctx.strokeStyle = 'rgba(244,247,251,0.38)';
@@ -2309,6 +2664,7 @@
       const range = Math.max(80, field.range || 220);
       const pulse = 0.5 + Math.sin(time * 2.2 + index * 1.7) * 0.5;
       const active = selected && selected.type === 'field' && selected.index === index;
+      const proximity = ballProximity(field.x, field.y, range);
 
       ctx.save();
       const influence = ctx.createRadialGradient(field.x, field.y, 20, field.x, field.y, range);
@@ -2359,7 +2715,7 @@
       ctx.translate(field.x, field.y);
       ctx.rotate(time * (isWhite ? -0.34 : 0.42));
       ctx.shadowColor = isWhite ? '#bff7ff' : '#a98bff';
-      ctx.shadowBlur = 18 + pulse * 10;
+      ctx.shadowBlur = 18 + pulse * 10 + proximity * 30;
       if (isWhite) {
         const core = ctx.createRadialGradient(-6, -7, 2, 0, 0, 26);
         core.addColorStop(0, '#ffffff');
@@ -2414,11 +2770,14 @@
       const color = portal.id.includes('blue') ? art.bluePortal : art.orangePortal;
       const active = selected && selected.type === 'portal' && selected.index === index;
       const spin = performance.now() / 520 + index * Math.PI;
+      const proximity = ballProximity(portal.x, portal.y, 210);
       ctx.save();
       ctx.translate(portal.x, portal.y);
       ctx.shadowColor = color;
-      ctx.shadowBlur = active ? 24 : 14;
-      ctx.fillStyle = portal.id.includes('blue') ? 'rgba(85, 167, 255, 0.08)' : 'rgba(255, 143, 87, 0.08)';
+      ctx.shadowBlur = (active ? 24 : 14) + proximity * 34;
+      ctx.fillStyle = portal.id.includes('blue')
+        ? `rgba(85, 167, 255, ${0.08 + proximity * 0.18})`
+        : `rgba(255, 143, 87, ${0.08 + proximity * 0.18})`;
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius + 17, 0, Math.PI * 2);
       ctx.fill();
@@ -2482,11 +2841,12 @@
       const isOn = Boolean(switchItem.activated);
       const pulse = 0.5 + Math.sin(performance.now() / 360 + index * 0.8) * 0.5;
       const glowAlpha = isOn ? 0.5 + pulse * 0.32 : 0.24 + pulse * 0.22;
+      const proximity = ballProximity(switchItem.x, switchItem.y, 190);
       ctx.save();
       ctx.translate(switchItem.x, switchItem.y);
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = active ? 24 : isOn ? 18 + pulse * 8 : 10 + pulse * 7;
-      ctx.fillStyle = `rgba(255, 48, 54, ${glowAlpha * 0.22})`;
+      ctx.shadowBlur = (active ? 24 : isOn ? 18 + pulse * 8 : 10 + pulse * 7) + proximity * 32;
+      ctx.fillStyle = `rgba(255, 48, 54, ${glowAlpha * 0.22 + proximity * 0.18})`;
       ctx.beginPath();
       ctx.arc(0, 0, radius + 18 + pulse * 5, 0, Math.PI * 2);
       ctx.fill();
@@ -2565,12 +2925,19 @@
       const width = door.width || 40;
       const height = door.height || 176;
       const center = obstacleCenter(door);
+      const proximity = ballProximityToBounds(obstacleBounds(door), 190);
       ctx.save();
       ctx.translate(center.x, center.y);
       ctx.rotate((door.angle || 0) * Math.PI / 180);
       ctx.globalAlpha = door.open ? 0.34 : 1;
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = door.open ? 9 + pulse * 8 : 16 + pulse * 7;
+      ctx.shadowBlur = (door.open ? 9 + pulse * 8 : 16 + pulse * 7) + proximity * 30;
+      ctx.save();
+      ctx.translate(8, 10);
+      ctx.fillStyle = 'rgba(0, 2, 5, 0.82)';
+      roundRectPath(-width / 2, -height / 2, width, height, 5);
+      ctx.fill();
+      ctx.restore();
       ctx.fillStyle = 'rgba(2, 5, 8, 0.92)';
       roundRectPath(-width / 2 - 5, -height / 2 - 5, width + 10, height + 10, 5);
       ctx.fill();
@@ -2720,6 +3087,21 @@
   function drawBall() {
     if (!state.ball) return;
     ctx.save();
+    ctx.fillStyle = state.ball.active ? 'rgba(0, 0, 0, 0.52)' : 'rgba(0, 0, 0, 0.4)';
+    ctx.shadowColor = 'rgba(0, 0, 0, 0.8)';
+    ctx.shadowBlur = 9;
+    ctx.beginPath();
+    ctx.ellipse(
+      state.ball.x + state.ball.radius * 0.58,
+      state.ball.y + state.ball.radius * 0.72,
+      state.ball.radius * 0.92,
+      state.ball.radius * 0.5,
+      -0.18,
+      0,
+      Math.PI * 2,
+    );
+    ctx.fill();
+    ctx.shadowBlur = 0;
     if (state.ball.active && state.ball.trail.length > 1) {
       ctx.lineCap = 'round';
       ctx.lineJoin = 'round';
@@ -2765,6 +3147,14 @@
     ctx.beginPath();
     ctx.arc(state.ball.x - state.ball.radius * 0.32, state.ball.y - state.ball.radius * 0.36, Math.max(1.8, state.ball.radius * 0.2), 0, Math.PI * 2);
     ctx.fill();
+    if (state.ball.active) {
+      const pulse = 0.5 + Math.sin(performance.now() / 90) * 0.5;
+      ctx.strokeStyle = `rgba(185, 241, 255, ${0.22 + pulse * 0.18})`;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.arc(state.ball.x, state.ball.y, state.ball.radius + 4 + pulse * 2, 0, Math.PI * 2);
+      ctx.stroke();
+    }
     ctx.restore();
   }
 
@@ -2822,6 +3212,7 @@
     drawRelayLaunchers();
     drawLaunchers();
     drawBall();
+    drawImpactBursts();
     drawSuccessEffects();
     drawLabels();
   }
@@ -3459,6 +3850,7 @@
     state.testLevel.focus = '草稿试玩';
     state.testLevel.editorTest = true;
     state.mode = 'play';
+    setMusicMode('game');
     ui.levelMenu.classList.add('hidden');
     ui.shell.classList.remove('menu-open');
     ui.playPanel.classList.remove('hidden');
@@ -3469,6 +3861,7 @@
 
   function returnToEditorFromTest() {
     state.mode = 'editor';
+    setMusicMode('game');
     state.testLevel = null;
     state.ball = null;
     clearShotPaths();
@@ -3508,6 +3901,7 @@
     ensureAudio();
     openLevelMenu();
   });
+  ui.audioToggle.addEventListener('click', () => setAudioMuted(!audio.muted));
   ui.exitGame.addEventListener('click', () => {
     state.mode = 'start';
     state.ball = null;
@@ -3716,7 +4110,24 @@
     }
   });
 
+  document.addEventListener('pointerdown', (event) => {
+    const button = event.target.closest && event.target.closest('button');
+    if (!button || button.disabled || button === ui.audioToggle) return;
+    ensureAudio();
+    playSound('ui');
+  });
+
+  document.addEventListener('visibilitychange', () => {
+    if (!audio.context) return;
+    if (document.hidden) audio.context.suspend();
+    else if (!audio.muted) {
+      audio.context.resume();
+      audio.nextMusicTime = audio.context.currentTime + 0.08;
+    }
+  });
+
   setLevel(0);
+  syncAudioToggle();
   openStartScreen();
   requestAnimationFrame(frame);
 })();
