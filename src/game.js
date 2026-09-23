@@ -1858,34 +1858,12 @@
     if (state.impactLights.length > 18) state.impactLights.shift();
   }
 
-  function ballProximity(x, y, radius = 180) {
-    if (!state.ball || state.mode === 'editor') return 0;
-    return clamp(1 - Math.hypot(state.ball.x - x, state.ball.y - y) / radius, 0, 1);
-  }
-
-  function ballProximityToBounds(bounds, radius = 180) {
-    if (!state.ball || state.mode === 'editor') return 0;
-    const closestX = clamp(state.ball.x, bounds.x, bounds.x + bounds.width);
-    const closestY = clamp(state.ball.y, bounds.y, bounds.y + bounds.height);
-    return clamp(1 - Math.hypot(state.ball.x - closestX, state.ball.y - closestY) / radius, 0, 1);
-  }
-
-  function drawDynamicFloorLight() {
+  function drawImpactFloorLight() {
     ctx.save();
     ctx.beginPath();
     ctx.rect(arena.x, arena.y, arena.width, arena.height);
     ctx.clip();
     ctx.globalCompositeOperation = 'screen';
-
-    if (state.ball && state.mode !== 'editor') {
-      const radius = state.ball.active ? 175 : 115;
-      const glow = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, radius);
-      glow.addColorStop(0, state.ball.active ? 'rgba(83, 200, 255, 0.18)' : 'rgba(84, 247, 178, 0.12)');
-      glow.addColorStop(0.38, 'rgba(83, 200, 255, 0.07)');
-      glow.addColorStop(1, 'rgba(83, 200, 255, 0)');
-      ctx.fillStyle = glow;
-      ctx.fillRect(state.ball.x - radius, state.ball.y - radius, radius * 2, radius * 2);
-    }
 
     state.impactLights.forEach((light) => {
       const progress = light.age / light.duration;
@@ -1907,6 +1885,15 @@
     state.impactLights.forEach((light) => {
       const progress = light.age / light.duration;
       const alpha = Math.pow(1 - progress, 1.35) * light.strength;
+      const coreRadius = 18 + progress * light.radius * 0.22;
+      const flare = ctx.createRadialGradient(light.x, light.y, 0, light.x, light.y, coreRadius);
+      flare.addColorStop(0, `${light.color}${Math.round(clamp(alpha * 0.86, 0, 0.96) * 255).toString(16).padStart(2, '0')}`);
+      flare.addColorStop(0.22, `${light.color}${Math.round(clamp(alpha * 0.44, 0, 0.72) * 255).toString(16).padStart(2, '0')}`);
+      flare.addColorStop(1, `${light.color}00`);
+      ctx.fillStyle = flare;
+      ctx.beginPath();
+      ctx.arc(light.x, light.y, coreRadius, 0, Math.PI * 2);
+      ctx.fill();
       ctx.strokeStyle = `${light.color}${Math.round(clamp(alpha * 0.74, 0, 0.9) * 255).toString(16).padStart(2, '0')}`;
       ctx.lineWidth = Math.max(1, 4.5 * (1 - progress));
       ctx.shadowColor = light.color;
@@ -2043,17 +2030,6 @@
     const lineWidth = sticky ? 10 : 7;
     const x1 = side === 'right' ? arena.x + arena.width : arena.x;
     const y1 = side === 'bottom' ? arena.y + arena.height : arena.y;
-    const wallDistance = !state.ball || state.mode === 'editor'
-      ? Number.POSITIVE_INFINITY
-      : side === 'top'
-        ? Math.abs(state.ball.y - arena.y)
-        : side === 'bottom'
-          ? Math.abs(state.ball.y - (arena.y + arena.height))
-          : side === 'left'
-            ? Math.abs(state.ball.x - arena.x)
-            : Math.abs(state.ball.x - (arena.x + arena.width));
-    const proximity = clamp(1 - wallDistance / 170, 0, 1);
-
     ctx.save();
     ctx.lineCap = 'round';
     ctx.strokeStyle = 'rgba(0, 2, 5, 0.9)';
@@ -2070,8 +2046,8 @@
     }
     ctx.stroke();
 
-    ctx.shadowColor = proximity > 0 ? (sticky ? art.sticky : art.cyan) : glow;
-    ctx.shadowBlur = (sticky ? 12 : 4) + proximity * 34;
+    ctx.shadowColor = glow;
+    ctx.shadowBlur = sticky ? 12 : 4;
     ctx.strokeStyle = color;
     ctx.lineWidth = lineWidth;
     ctx.beginPath();
@@ -2083,24 +2059,6 @@
       ctx.lineTo(x1, arena.y + arena.height);
     }
     ctx.stroke();
-
-    if (proximity > 0 && state.ball) {
-      const reactive = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, 180);
-      reactive.addColorStop(0, sticky ? `rgba(255, 226, 112, ${0.38 + proximity * 0.48})` : `rgba(205, 248, 255, ${0.32 + proximity * 0.5})`);
-      reactive.addColorStop(0.48, sticky ? `rgba(242, 200, 75, ${proximity * 0.28})` : `rgba(92, 231, 255, ${proximity * 0.24})`);
-      reactive.addColorStop(1, 'rgba(0,0,0,0)');
-      ctx.strokeStyle = reactive;
-      ctx.lineWidth = lineWidth + 3;
-      ctx.beginPath();
-      if (side === 'top' || side === 'bottom') {
-        ctx.moveTo(arena.x, y1);
-        ctx.lineTo(arena.x + arena.width, y1);
-      } else {
-        ctx.moveTo(x1, arena.y);
-        ctx.lineTo(x1, arena.y + arena.height);
-      }
-      ctx.stroke();
-    }
 
     if (sticky) {
       ctx.shadowBlur = 0;
@@ -2155,7 +2113,7 @@
     ctx.fillRect(arena.x, arena.y, arena.width, arena.height);
     drawGrid();
     drawFloorDetails();
-    drawDynamicFloorLight();
+    drawImpactFloorLight();
     const vignette = ctx.createRadialGradient(
       arena.x + arena.width / 2,
       arena.y + arena.height / 2,
@@ -2177,12 +2135,11 @@
   function drawTarget(target = level().target, selected = false) {
     const pulse = 0.5 + Math.sin(performance.now() / 260) * 0.5;
     const spin = performance.now() / 1300;
-    const proximity = ballProximity(target.x, target.y, 210);
     ctx.save();
     ctx.translate(target.x, target.y);
     ctx.shadowColor = art.target;
-    ctx.shadowBlur = selected ? 26 : 12 + pulse * 5 + proximity * 34;
-    ctx.fillStyle = `rgba(84, 247, 178, ${selected ? 0.24 : 0.08 + pulse * 0.04 + proximity * 0.2})`;
+    ctx.shadowBlur = selected ? 26 : 12 + pulse * 5;
+    ctx.fillStyle = `rgba(84, 247, 178, ${selected ? 0.24 : 0.08 + pulse * 0.04})`;
     ctx.beginPath();
     ctx.arc(0, 0, target.radius + 19, 0, Math.PI * 2);
     ctx.fill();
@@ -2228,11 +2185,10 @@
   function drawLauncherShape(launcher, color, label, active = false) {
     const radians = launcher.angle * Math.PI / 180;
     const spin = performance.now() / 900;
-    const proximity = ballProximity(launcher.x, launcher.y, 190);
     ctx.save();
     ctx.shadowColor = color;
-    ctx.shadowBlur = (active ? 22 : 9) + proximity * 28;
-    ctx.fillStyle = active ? `${color}22` : proximity > 0 ? `${color}${Math.round(proximity * 42).toString(16).padStart(2, '0')}` : 'rgba(244,247,251,0.05)';
+    ctx.shadowBlur = active ? 22 : 9;
+    ctx.fillStyle = active ? `${color}22` : 'rgba(244,247,251,0.05)';
     ctx.beginPath();
     ctx.arc(launcher.x, launcher.y, active ? 30 : 25, 0, Math.PI * 2);
     ctx.fill();
@@ -2486,8 +2442,6 @@
     const bounds = obstacleBounds(obstacle);
     const isBoost = obstacle.material === 'boost';
     const isSticky = obstacle.material === 'sticky';
-    const proximity = ballProximityToBounds(bounds, 190);
-    const reactiveColor = isBoost ? art.boostCore : isSticky ? art.sticky : obstacle.path ? art.moving : art.cyan;
     ctx.save();
     ctx.translate(8, 10);
     ctx.fillStyle = 'rgba(0, 2, 5, 0.78)';
@@ -2512,23 +2466,8 @@
     ctx.fill();
     ctx.strokeStyle = isBoost ? 'rgba(105, 255, 160, 0.92)' : isSticky ? 'rgba(255, 224, 100, 0.92)' : 'rgba(207, 232, 244, 0.48)';
     ctx.lineWidth = isSticky ? 3.5 : 2.5;
-    ctx.shadowColor = reactiveColor;
-    ctx.shadowBlur = proximity * 30;
+    ctx.shadowBlur = 0;
     ctx.stroke();
-
-    if (proximity > 0 && state.ball) {
-      ctx.save();
-      traceObstacleShape(obstacle);
-      ctx.clip();
-      ctx.globalCompositeOperation = 'screen';
-      const reactive = ctx.createRadialGradient(state.ball.x, state.ball.y, 0, state.ball.x, state.ball.y, 175);
-      reactive.addColorStop(0, `${reactiveColor}${Math.round((0.3 + proximity * 0.5) * 255).toString(16).padStart(2, '0')}`);
-      reactive.addColorStop(0.42, `${reactiveColor}${Math.round(proximity * 0.2 * 255).toString(16).padStart(2, '0')}`);
-      reactive.addColorStop(1, `${reactiveColor}00`);
-      ctx.fillStyle = reactive;
-      ctx.fillRect(bounds.x - 180, bounds.y - 180, bounds.width + 360, bounds.height + 360);
-      ctx.restore();
-    }
 
     ctx.save();
     traceObstacleShape(obstacle);
@@ -2642,9 +2581,8 @@
         ctx.arc(originX + centerOffsetX + obstacle.path.x, originY + centerOffsetY + obstacle.path.y, 5, 0, Math.PI * 2);
         ctx.fill();
       }
-      const proximity = ballProximityToBounds(bounds, 190);
       ctx.shadowColor = obstacle.material === 'boost' ? art.boost : obstacle.material === 'sticky' ? art.sticky : (moving ? art.moving : art.cyan);
-      ctx.shadowBlur = (obstacle.material === 'boost' ? 15 : obstacle.material === 'sticky' ? 10 : (moving ? 10 : 3)) + proximity * 24;
+      ctx.shadowBlur = obstacle.material === 'boost' ? 15 : obstacle.material === 'sticky' ? 10 : (moving ? 10 : 3);
       drawObstacleShape(obstacle, obstacleColor(obstacle));
       if (active) {
         ctx.strokeStyle = 'rgba(244,247,251,0.38)';
@@ -2664,8 +2602,6 @@
       const range = Math.max(80, field.range || 220);
       const pulse = 0.5 + Math.sin(time * 2.2 + index * 1.7) * 0.5;
       const active = selected && selected.type === 'field' && selected.index === index;
-      const proximity = ballProximity(field.x, field.y, range);
-
       ctx.save();
       const influence = ctx.createRadialGradient(field.x, field.y, 20, field.x, field.y, range);
       if (isWhite) {
@@ -2715,7 +2651,7 @@
       ctx.translate(field.x, field.y);
       ctx.rotate(time * (isWhite ? -0.34 : 0.42));
       ctx.shadowColor = isWhite ? '#bff7ff' : '#a98bff';
-      ctx.shadowBlur = 18 + pulse * 10 + proximity * 30;
+      ctx.shadowBlur = 18 + pulse * 10;
       if (isWhite) {
         const core = ctx.createRadialGradient(-6, -7, 2, 0, 0, 26);
         core.addColorStop(0, '#ffffff');
@@ -2770,14 +2706,13 @@
       const color = portal.id.includes('blue') ? art.bluePortal : art.orangePortal;
       const active = selected && selected.type === 'portal' && selected.index === index;
       const spin = performance.now() / 520 + index * Math.PI;
-      const proximity = ballProximity(portal.x, portal.y, 210);
       ctx.save();
       ctx.translate(portal.x, portal.y);
       ctx.shadowColor = color;
-      ctx.shadowBlur = (active ? 24 : 14) + proximity * 34;
+      ctx.shadowBlur = active ? 24 : 14;
       ctx.fillStyle = portal.id.includes('blue')
-        ? `rgba(85, 167, 255, ${0.08 + proximity * 0.18})`
-        : `rgba(255, 143, 87, ${0.08 + proximity * 0.18})`;
+        ? 'rgba(85, 167, 255, 0.08)'
+        : 'rgba(255, 143, 87, 0.08)';
       ctx.beginPath();
       ctx.arc(0, 0, portal.radius + 17, 0, Math.PI * 2);
       ctx.fill();
@@ -2841,12 +2776,11 @@
       const isOn = Boolean(switchItem.activated);
       const pulse = 0.5 + Math.sin(performance.now() / 360 + index * 0.8) * 0.5;
       const glowAlpha = isOn ? 0.5 + pulse * 0.32 : 0.24 + pulse * 0.22;
-      const proximity = ballProximity(switchItem.x, switchItem.y, 190);
       ctx.save();
       ctx.translate(switchItem.x, switchItem.y);
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = (active ? 24 : isOn ? 18 + pulse * 8 : 10 + pulse * 7) + proximity * 32;
-      ctx.fillStyle = `rgba(255, 48, 54, ${glowAlpha * 0.22 + proximity * 0.18})`;
+      ctx.shadowBlur = active ? 24 : isOn ? 18 + pulse * 8 : 10 + pulse * 7;
+      ctx.fillStyle = `rgba(255, 48, 54, ${glowAlpha * 0.22})`;
       ctx.beginPath();
       ctx.arc(0, 0, radius + 18 + pulse * 5, 0, Math.PI * 2);
       ctx.fill();
@@ -2925,13 +2859,12 @@
       const width = door.width || 40;
       const height = door.height || 176;
       const center = obstacleCenter(door);
-      const proximity = ballProximityToBounds(obstacleBounds(door), 190);
       ctx.save();
       ctx.translate(center.x, center.y);
       ctx.rotate((door.angle || 0) * Math.PI / 180);
       ctx.globalAlpha = door.open ? 0.34 : 1;
       ctx.shadowColor = art.red;
-      ctx.shadowBlur = (door.open ? 9 + pulse * 8 : 16 + pulse * 7) + proximity * 30;
+      ctx.shadowBlur = door.open ? 9 + pulse * 8 : 16 + pulse * 7;
       ctx.save();
       ctx.translate(8, 10);
       ctx.fillStyle = 'rgba(0, 2, 5, 0.82)';
@@ -3043,8 +2976,6 @@
     ctx.lineWidth = 2;
     ctx.lineCap = 'round';
     ctx.lineJoin = 'round';
-    ctx.shadowColor = 'rgba(85, 167, 255, 0.38)';
-    ctx.shadowBlur = 5;
     ctx.beginPath();
     let needsMove = true;
     trace.points.forEach((point, index) => {
@@ -3111,17 +3042,12 @@
         else ctx.lineTo(point.x, point.y);
       });
       ctx.strokeStyle = 'rgba(36, 156, 255, 0.18)';
-      ctx.lineWidth = 9;
-      ctx.shadowColor = 'rgba(83, 200, 255, 0.52)';
-      ctx.shadowBlur = 10;
+      ctx.lineWidth = 6;
       ctx.stroke();
       ctx.strokeStyle = 'rgba(199, 243, 255, 0.52)';
       ctx.lineWidth = 2.4;
-      ctx.shadowBlur = 3;
       ctx.stroke();
     }
-    ctx.shadowColor = '#53c8ff';
-    ctx.shadowBlur = state.ball.active ? 15 : 8;
     const marble = ctx.createRadialGradient(
       state.ball.x - state.ball.radius * 0.38,
       state.ball.y - state.ball.radius * 0.42,
@@ -3142,19 +3068,10 @@
     ctx.strokeStyle = '#dff8ff';
     ctx.lineWidth = 2.5;
     ctx.stroke();
-    ctx.shadowBlur = 0;
     ctx.fillStyle = 'rgba(255,255,255,0.84)';
     ctx.beginPath();
     ctx.arc(state.ball.x - state.ball.radius * 0.32, state.ball.y - state.ball.radius * 0.36, Math.max(1.8, state.ball.radius * 0.2), 0, Math.PI * 2);
     ctx.fill();
-    if (state.ball.active) {
-      const pulse = 0.5 + Math.sin(performance.now() / 90) * 0.5;
-      ctx.strokeStyle = `rgba(185, 241, 255, ${0.22 + pulse * 0.18})`;
-      ctx.lineWidth = 1.2;
-      ctx.beginPath();
-      ctx.arc(state.ball.x, state.ball.y, state.ball.radius + 4 + pulse * 2, 0, Math.PI * 2);
-      ctx.stroke();
-    }
     ctx.restore();
   }
 
