@@ -1151,6 +1151,80 @@ button:disabled {
   line-height: 1.55;
 }
 
+.completion-panel {
+  position: relative;
+  overflow: hidden;
+  width: min(390px, 100%);
+  padding: 25px 24px 22px;
+  border-color: rgba(92, 231, 255, 0.52);
+  border-radius: 2px;
+  background:
+    linear-gradient(90deg, rgba(92, 231, 255, 0.2), transparent 52%) top / 100% 1px no-repeat,
+    linear-gradient(180deg, rgba(14, 31, 40, 0.98), rgba(6, 14, 19, 0.98));
+  box-shadow:
+    0 28px 90px rgba(0, 0, 0, 0.7),
+    0 0 28px rgba(83, 200, 255, 0.1),
+    inset 3px 0 0 rgba(92, 231, 255, 0.5);
+}
+
+.completion-panel::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  right: 13px;
+  width: 32px;
+  height: 5px;
+  border-top: 1px solid rgba(92, 231, 255, 0.64);
+  border-bottom: 1px solid rgba(92, 231, 255, 0.22);
+}
+
+.completion-panel .eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-bottom: 7px;
+  color: rgba(133, 231, 255, 0.74);
+  font-family: Bahnschrift, "Segoe UI", sans-serif;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.completion-panel .eyebrow::before {
+  content: "";
+  width: 14px;
+  height: 3px;
+  background: var(--cyan);
+  box-shadow: 0 0 8px rgba(92, 231, 255, 0.48);
+}
+
+.completion-panel h2 {
+  font-family: Bahnschrift, "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-size: clamp(32px, 8vw, 42px);
+  font-weight: 800;
+  letter-spacing: 0;
+  text-shadow: 0 0 18px rgba(84, 247, 178, 0.2);
+}
+
+.completion-panel p:not(.eyebrow) {
+  max-width: 28em;
+  margin-top: 8px;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.completion-panel .modal-actions {
+  margin-top: 19px;
+}
+
+.completion-panel .modal-actions button {
+  min-height: 42px;
+  border-radius: 2px;
+  font-family: Bahnschrift, "Microsoft YaHei", "Segoe UI", sans-serif;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
 .modal-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

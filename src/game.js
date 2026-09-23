@@ -1403,13 +1403,13 @@
   function showCompletionPrompt() {
     if (state.testLevel?.editorTest) {
       state.completionResult = {
-        title: '试玩命中成功',
-        body: '草稿可以完成。可以回编辑器继续调整，也可以直接保存。',
+        title: '试玩已通关',
+        body: '可继续编辑，或保存当前关卡。',
       };
       ui.completeTitle.textContent = state.completionResult.title;
       ui.completeBody.textContent = state.completionResult.body;
-      ui.continueLevel.textContent = '回到编辑器继续修改';
-      ui.replayLevel.textContent = '保存并返回菜单';
+      ui.continueLevel.textContent = '继续编辑';
+      ui.replayLevel.textContent = '保存并返回';
       ui.continueLevel.className = 'primary';
       ui.replayLevel.className = '';
       ui.continueLevel.classList.remove('hidden');
